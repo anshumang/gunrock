@@ -6,26 +6,28 @@ OPTION3="--undirected" #undirected and do not mark-pred"
 OPTION4="--undirected --mark-pred" #undirected and mark-pred"
 
 #put OS and Device type here
-SUFFIX="linuxmint15.k40cx2"
+SUFFIX="linuxmint15.k40cx2_6.0"
+EXCUTION="./bin/test_bfs_6.0_x86_64"
+DATADIR="../../dataset/large"
+OPTION="--src=randomize --device=0,1"
 
 mkdir -p eval/$SUFFIX
 
-for i in ak2010 belgium_osm coAuthorsDBLP delaunay_n13 delaunay_n21 kron_g500-logn21 webbase-1M
+for i in ak2010 belgium_osm coAuthorsDBLP delaunay_n13 delaunay_n21 kron_g500-logn21 webbase-1M soc-LiveJournal1
 do
-    echo ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION1 --v --device=0,1
-
-         ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION1 --v --device=0,1 > eval/$SUFFIX/$i.$SUFFIX.dir_no_mark_pred.txt
+    echo $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION1
+         $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION1 > eval/$SUFFIX/$i.$SUFFIX.dir_no_mark_pred.txt
     sleep 10
-    echo ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION2 --v --device=0,1
 
-         ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION2 --v --device=0,1 > eval/$SUFFIX/$i.$SUFFIX.dir_mark_pred.txt
+    echo $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION2
+         $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION2 > eval/$SUFFIX/$i.$SUFFIX.dir_mark_pred.txt
     sleep 10
-    echo ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION3 --v --device=0,1
 
-         ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION3 --v --device=0,1 > eval/$SUFFIX/$i.$SUFFIX.undir_no_mark_pred.txt
+    echo $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION3
+         $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION3 > eval/$SUFFIX/$i.$SUFFIX.undir_no_mark_pred.txt
     sleep 10
-    echo ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION4 --v --device=0,1
 
-         ./bin/test_bfs_5.5_x86_64 market ../../dataset/large/$i/$i.mtx --src=randomize $OPTION4 --v --device=0,1 > eval/$SUFFIX/$i.$SUFFIX.undir_mark_pred.txt
+    echo $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION4
+         $EXCUTION market $DATADIR/$i/$i.mtx $OPTION $OPTION4 > eval/$SUFFIX/$i.$SUFFIX.undir_mark_pred.txt
     sleep 10
 done

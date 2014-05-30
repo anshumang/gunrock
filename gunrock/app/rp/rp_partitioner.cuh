@@ -88,10 +88,10 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
         int num_gpus,
         float *weitage)
     {
-        printf("Init2 begin.\n"); fflush(stdout);
-        if (weitage!=NULL) util::cpu_mt::PrintCPUArray("weitage0",weitage,num_gpus);
+        //printf("Init2 begin.\n"); fflush(stdout);
+        //if (weitage!=NULL) util::cpu_mt::PrintCPUArray("weitage0",weitage,num_gpus);
         this->Init(graph,num_gpus);
-        printf("Init returned.\n"); fflush(stdout);
+        //printf("Init returned.\n"); fflush(stdout);
         this->weitage=new float[num_gpus+1];
         if (weitage==NULL)
             for (int gpu=0;gpu<num_gpus;gpu++) this->weitage[gpu]=1.0f/num_gpus;
@@ -101,18 +101,18 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
             for (int gpu=0;gpu<num_gpus;gpu++) this->weitage[gpu]=weitage[gpu]/sum; 
         }
         for (int gpu=0;gpu<num_gpus;gpu++) this->weitage[gpu+1]+=this->weitage[gpu];
-        util::cpu_mt::PrintCPUArray("weitage1", this->weitage, num_gpus);
-        printf("Init2 end.\n"); fflush(stdout);
+        //util::cpu_mt::PrintCPUArray("weitage1", this->weitage, num_gpus);
+        //printf("Init2 end.\n"); fflush(stdout);
     }
 
     ~RandomPartitioner()
     {
-        printf("~RandomPartitioner begin\n");fflush(stdout);
+        //printf("~RandomPartitioner begin\n");fflush(stdout);
         if (weitage!=NULL)
         {
             delete[] weitage;weitage=NULL;
         }
-        printf("~RandomPartitioner end\n"); fflush(stdout);
+        //printf("~RandomPartitioner end\n"); fflush(stdout);
     }
 
     //template <bool LOAD_EDGE_VALUES, bool LOAD_NODE_VALUES>
@@ -131,8 +131,8 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
         //SizeT*      tPosit = new SizeT[nodes];
         sort_node<SizeT> *sort_list = new sort_node<SizeT>[nodes];
 
-        printf("Partition begin. seed=%ld\n", t);fflush(stdout);
-        util::cpu_mt::PrintCPUArray("weitage", weitage, this->num_gpus);
+        //printf("Partition begin. seed=%ld\n", t);fflush(stdout);
+        //util::cpu_mt::PrintCPUArray("weitage", weitage, this->num_gpus);
 
         srand(t);
         /*for (SizeT node=0;node<this->graph->nodes;node++)
@@ -186,7 +186,7 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
         in_offsets        = this->in_offsets;
         out_offsets       = this->out_offsets;
         //printf("%p, %p, %d\n", partition_tables, partition_tables[1], partition_tables[1][0]);fflush(stdout);
-        printf("Partition end.\n");fflush(stdout);
+        //printf("Partition end.\n");fflush(stdout);
         return retval;
     }
 };

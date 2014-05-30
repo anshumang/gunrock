@@ -22,8 +22,10 @@
 #include <gunrock/util/multiple_buffering.cuh>
 #include <gunrock/util/io/modified_load.cuh>
 #include <gunrock/util/io/modified_store.cuh>
+#include <gunrock/util/array_utils.cuh>
 #include <gunrock/app/rp/rp_partitioner.cuh>
 #include <vector>
+#include <string>
 
 namespace gunrock {
 namespace app {
@@ -38,12 +40,12 @@ enum FrontierType {
     MIXED_FRONTIERS         // O(n) global vertex frontier, O(m) global edge frontier
 };
 
-
 /**
  * @brief Base problem structure.
  *
  * @tparam _VertexId            Type of signed integer to use as vertex id (e.g., uint32)
  * @tparam _SizeT               Type of unsigned integer to use for array indexing. (e.g., uint32)
+ * @tparam _Value               Type of float or double to use for computing vertex values
  * @tparam _USE_DOUBLE_BUFFER   Boolean type parameter which defines whether to use double buffer
  */
 template <
@@ -51,7 +53,6 @@ template <
     typename    _SizeT,
     typename    _Value,
     bool        _USE_DOUBLE_BUFFER>
-
 struct ProblemBase
 {
     typedef _VertexId           VertexId;
@@ -61,7 +62,6 @@ struct ProblemBase
     /**
      * Load instruction cache-modifier const defines.
      */
-
     static const util::io::ld::CacheModifier QUEUE_READ_MODIFIER                    = util::io::ld::cg;             // Load instruction cache-modifier for reading incoming frontier vertex-ids. Valid on SM2.0 or newer
     static const util::io::ld::CacheModifier COLUMN_READ_MODIFIER                   = util::io::ld::NONE;           // Load instruction cache-modifier for reading CSR column-indices.
     static const util::io::ld::CacheModifier EDGE_VALUES_READ_MODIFIER              = util::io::ld::NONE;           // Load instruction cache-modifier for reading edge values.
@@ -74,31 +74,30 @@ struct ProblemBase
      */
     struct GraphSlice
     {
-        //Slice Index
-        int             index;
-        Csr<VertexId,Value,SizeT>* graph;           //
-        int             *partition_table;           //
-        VertexId        *convertion_table;          //
-        SizeT           *in_offset;                 //
-        SizeT           *out_offset;                //
+        int             index;                      // Slice Index
+        Csr<VertexId,Value,SizeT>* graph;           // Pointer to CSR format subgraph
+        VertexId        nodes;                      // Number of nodes in slice
+        SizeT           edges;                      // Number of edges in slice
+        cudaStream_t    stream;                     // CUDA stream to use for processing the slice 
 
-        SizeT           *d_row_offsets;             // CSR format row offset on device memory
-        VertexId        *d_column_indices;          // CSR format column indices on device memory
-        VertexId        *d_convertion_table;        // 
-        int             *d_partition_table;         //
-        SizeT           *d_in_offset;               //
-        //SizeT           *d_out_offset;              //
-
-        //Frontier queues. Used to track working frontier.
-        util::DoubleBuffer<VertexId, VertexId>      frontier_queues;
-        SizeT                                       frontier_elements[2];
-
-        //Number of nodes and edges in slice
-        VertexId        nodes;
-        SizeT           edges;
-
-        //CUDA stream to use for processing the slice
-        cudaStream_t    stream;
+        //SizeT           *d_row_offsets;             // CSR format row offset on device memory
+        util::Array1D<SizeT,SizeT   >  row_offsets    ;
+        //VertexId        *d_column_indices;          // CSR format column indices on device memory
+        util::Array1D<SizeT,VertexId> column_indices  ;
+        //int             *partition_table;           // Host partition number for vertexes, local is always 0
+        util::Array1D<SizeT,int     > partition_table ;
+        //VertexId        *convertion_table;          // Vertex number of vertexes in their hosting partition
+        util::Array1D<SizeT,VertexId> convertion_table;
+        //SizeT           *in_offset;                 // Offsets to accept incoming data from peers
+        util::Array1D<SizeT,SizeT   > in_offset       ;
+        //SizeT           *out_offset;                // Offsets to push outgoing data to peers
+        util::Array1D<SizeT,SizeT   > out_offset      ;
+        //VertexId        *d_convertion_table;        // convertion_table on device
+        //int             *d_partition_table;         // partition_table on device
+        //SizeT           *d_in_offset;               // in_offset on device
+        
+        util::DoubleBuffer<VertexId, VertexId>      frontier_queues;      // Frontier queues, used to track working frontier.
+        SizeT                                       frontier_elements[2]; // Size of Frontier_queues
 
         /**
          * @brief GraphSlice Constructor
@@ -106,18 +105,17 @@ struct ProblemBase
          * @param[in] index GPU index, reserved for multi-GPU use in future.
          * @param[in] stream CUDA Stream we use to allocate storage for this graph slice.
          */
-        GraphSlice(int index, cudaStream_t stream)// :
-            //index(index),
-            //d_row_offsets(NULL),
-            //d_column_indices(NULL),
-            //d_foreign_nodes(NULL),
-            //nodes(0),
-            //edges(0),
-            //stream(stream)
+        GraphSlice(int index, cudaStream_t stream)
         {
             this->index        = index;
             graph              = NULL;
-            partition_table    = NULL;
+            row_offsets     .SetName("row_offsets"     );
+            column_indices  .SetName("column_indices"  );
+            partition_table .SetName("partition_table" );
+            convertion_table.SetName("convertion_table");
+            in_offset       .SetName("in_offset"       );
+            out_offset      .SetName("out_offset"      );
+            /*partition_table    = NULL;
             convertion_table   = NULL;
             in_offset          = NULL;
             out_offset         = NULL;
@@ -125,17 +123,17 @@ struct ProblemBase
             d_column_indices   = NULL;
             d_convertion_table = NULL;
             d_partition_table  = NULL;
-            d_in_offset        = NULL;
-            //d_out_offset       = NULL;
+            d_in_offset        = NULL;*/
             nodes              = 0;
             edges              = 0;
             this->stream       = stream;
+
             // Initialize double buffer frontier queue lengths
             for (int i = 0; i < 2; ++i)
             {
-                frontier_elements[i] = 0;
-                frontier_queues.d_keys[i]=NULL;
-                frontier_queues.d_values[i]=NULL;
+                frontier_elements       [i] = 0;
+                frontier_queues.d_keys  [i] = NULL;
+                frontier_queues.d_values[i] = NULL;
             }
         }
 
@@ -144,40 +142,46 @@ struct ProblemBase
          */
         virtual ~GraphSlice()
         {
-            printf("~GraphSlice begin.\n"); fflush(stdout);
             // Set device (use slice index)
             util::GRError(cudaSetDevice(index), "GpuSlice cudaSetDevice failed", __FILE__, __LINE__);
 
-            printf("1"); fflush(stdout);
             // Free pointers
-            if (d_row_offsets     ) util::GRError(cudaFree(d_row_offsets     ), 
-                                        "GpuSlice cudaFree d_row_offsets failed"     , __FILE__, __LINE__); printf("2"); fflush(stdout);
-            if (d_column_indices  ) util::GRError(cudaFree(d_column_indices  ), 
-                                        "GpuSlice cudaFree d_column_indices failed"  , __FILE__, __LINE__); printf("3"); fflush(stdout);
-            if (d_convertion_table) util::GRError(cudaFree(d_convertion_table), 
-                                        "GpuSlice cudaFree d_convertion_table failed", __FILE__, __LINE__); printf("4"); fflush(stdout);
-            if (d_partition_table ) util::GRError(cudaFree(d_partition_table ),
-                                        "GpuSlice cudaFree d_partition_table failed" , __FILE__, __LINE__); printf("5"); fflush(stdout);
-            if (d_in_offset       ) util::GRError(cudaFree(d_in_offset       ),
-                                        "GpuSlice cudaFree d_in_offset failed"       , __FILE__, __LINE__); printf("6"); fflush(stdout);
-            //if (d_out_offset      ) util::GRError(cudaFree(d_out_offset      ),
-            //                            "GpuSlice cudaFree d_out_offset failed"      , __FILE__, __LINE__); printf("7"); fflush(stdout);
+            row_offsets     .Release();
+            //if (d_row_offsets     ) util::GRError(cudaFree(d_row_offsets     ), 
+            //                            "GpuSlice cudaFree d_row_offsets failed"     , __FILE__, __LINE__);
+            column_indices  .Release();
+            //if (d_column_indices  ) util::GRError(cudaFree(d_column_indices  ), 
+            //                            "GpuSlice cudaFree d_column_indices failed"  , __FILE__, __LINE__);
+            convertion_table.Release();
+            //if (d_convertion_table) util::GRError(cudaFree(d_convertion_table), 
+            //                            "GpuSlice cudaFree d_convertion_table failed", __FILE__, __LINE__);
+            partition_table .Release();
+            //if (d_partition_table ) util::GRError(cudaFree(d_partition_table ),
+            //                            "GpuSlice cudaFree d_partition_table failed" , __FILE__, __LINE__);
+            in_offset       .Release();
+            out_offset      .Release();
+            //if (d_in_offset       ) util::GRError(cudaFree(d_in_offset       ),
+            //                            "GpuSlice cudaFree d_in_offset failed"       , __FILE__, __LINE__);
 
             for (int i = 0; i < 2; ++i) {
-                printf(" %d,%d ",i,frontier_elements[i]); fflush(stdout);
                 //if (frontier_queues.d_keys  [i]) util::GRError(cudaFree(frontier_queues.d_keys  [i]), 
-                //                                     "GpuSlice cudaFree frontier_queues.d_keys failed"  , __FILE__, __LINE__); printf("8"); fflush(stdout);
+                //                                     "GpuSlice cudaFree frontier_queues.d_keys failed"  , __FILE__, __LINE__);
                 if (frontier_queues.d_values[i]) util::GRError(cudaFree(frontier_queues.d_values[i]), 
-                                                     "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__); printf("9"); fflush(stdout);
+                                                     "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__);
             }
+        } // end of ~GraphSlice()
 
-            /*// Destroy stream
-            if (stream) {
-                util::GRError(cudaStreamDestroy(stream), "GpuSlice cudaStreamDestroy failed", __FILE__, __LINE__);
-            }*/
-            printf("~GraphSlice end.\n"); fflush(stdout);
-        }
-
+        /**
+         * @brief Initalize graph slice
+         * @param[in] stream_from_host Whether to stream data from host
+         * @param[in] num_gpus Number of gpus
+         * @param[in] graph Pointer to the sub_graph
+         * @param[in] partition_table 
+         * @param[in] convertion_table
+         * @param[in] in_offset
+         * @param[in] out_offset
+         * \return cudaError_t Object incidating the success of all CUDA function calls
+         */
         cudaError_t Init(
             bool                       stream_from_host,
             int                        num_gpus,
@@ -187,20 +191,24 @@ struct ProblemBase
             SizeT*                     in_offset,
             SizeT*                     out_offset)
         {
-            printf("GPUSlice Init begin. \n"); fflush(stdout);
             cudaError_t retval     = cudaSuccess;
             this->graph            = graph;
             nodes                  = graph->nodes;
             edges                  = graph->edges;
-            this->partition_table  = partition_table;
-            this->convertion_table = convertion_table;
-            this->in_offset        = in_offset;
-            this->out_offset       = out_offset;
+            //this->partition_table  = partition_table;
+            this->partition_table .SetPointer(partition_table   , nodes     );
+            //this->convertion_table = convertion_table;
+            this->convertion_table.SetPointer(convertion_table  , nodes     );
+            //this->in_offset        = in_offset;
+            this->in_offset       .SetPointer(in_offset         , num_gpus+1);
+            //this->out_offset       = out_offset;
+            this->out_offset      .SetPointer(out_offset        , num_gpus+1);
+            this->row_offsets	  .SetPointer(graph->row_offsets, nodes+1   );
+            this->column_indices  .SetPointer(graph->column_indices, edges  );
 
             do {
                 if (retval = util::GRError(cudaSetDevice(index), "GpuSlice cudaSetDevice failed", __FILE__, __LINE__)) break;
-                //printf("1");fflush(stdout);
-                if (stream_from_host) {
+                /*if (stream_from_host) {
                     if (retval = util::GRError(cudaHostGetDevicePointer(
                                     (void **)&(d_row_offsets),
                                     (void * )&(graph->row_offsets), 0),
@@ -209,9 +217,11 @@ struct ProblemBase
                                     (void **)&(d_column_indices),
                                     (void * )&(graph->column_indices), 0),
                                  "GpuSlice cudaHostGetDevicePointer d_column_indices failed", __FILE__, __LINE__)) break;
-                } else {
+                } else {*/
                     // Allocate and initialize d_row_offsets
-                    if (retval = util::GRError(cudaMalloc(
+                    if (retval = this->row_offsets.Allocate(nodes+1      ,util::DEVICE)) break;
+                    if (retval = this->row_offsets.Move    (util::HOST   ,util::DEVICE)) break;
+                    /*if (retval = util::GRError(cudaMalloc(
                         (void**)&(d_row_offsets),
                         (nodes+1) * sizeof(SizeT)),
                         "GraphSlice cudaMalloc d_row_offsets failed", __FILE__, __LINE__)) break;
@@ -222,9 +232,12 @@ struct ProblemBase
                         (nodes+1) * sizeof(SizeT),
                         cudaMemcpyHostToDevice),
                         "GraphSlice cudaMemcpy d_row_offsets failed", __FILE__, __LINE__)) break;
+                    */
 
                     // Allocate and initialize d_column_indices
-                    if (retval = util::GRError(cudaMalloc(
+                    if (retval = this->column_indices.Allocate(edges     ,util::DEVICE)) break;
+                    if (retval = this->column_indices.Move    (util::HOST,util::DEVICE)) break;
+                    /*if (retval = util::GRError(cudaMalloc(
                         (void**)&(d_column_indices),
                         edges * sizeof(VertexId)),
                         "GraphSlice cudaMalloc d_column_indices failed", __FILE__, __LINE__)) break;
@@ -235,87 +248,74 @@ struct ProblemBase
                         edges * sizeof(VertexId),
                         cudaMemcpyHostToDevice),
                         "GraphSlice cudaMemcpy d_column_indices failed", __FILE__, __LINE__)) break;
-                } //end if (stream_from_host)
+                    */
+                //} //end if (stream_from_host)
 
-                printf("2");fflush(stdout);
-                if (num_gpus >1)
+                //printf("num_gpus = %d\n",num_gpus);fflush(stdout);
+                // For multi-GPU cases
+                if (num_gpus > 1)
                 {
                     // Allocate and initalize d_convertion_table
-                    if (retval = util::GRError(cudaMalloc(
+                    if (retval = this->partition_table.Allocate(nodes     ,util::DEVICE)) break;
+                    if (retval = this->partition_table.Move    (util::HOST,util::DEVICE)) break;
+                    /*if (retval = util::GRError(cudaMalloc(
                         (void**)&(d_partition_table),
                         nodes * sizeof(VertexId)),
                         "GraphSlice cudaMalloc d_partition_table failed", __FILE__, __LINE__)) break;
-                    printf("3");fflush(stdout);
-
                     if (retval = util::GRError(cudaMemcpy(
                         d_partition_table,
                         partition_table,
                         nodes * sizeof(VertexId),
                         cudaMemcpyHostToDevice),
                         "GraphSlice cudaMemcpy d_partition_table failed", __FILE__, __LINE__)) break;
-                    printf("4");fflush(stdout);
+                    */
 
                     // Allocate and initalize d_convertion_table
-                    if (retval = util::GRError(cudaMalloc(
+                    if (retval = this->convertion_table.Allocate(nodes     ,util::DEVICE)) break;
+                    if (retval = this->convertion_table.Move    (util::HOST,util::DEVICE)) break;
+                    /*if (retval = util::GRError(cudaMalloc(
                         (void**)&(d_convertion_table),
                         nodes * sizeof(VertexId)),
                         "GraphSlice cudaMalloc d_convertion_table failed", __FILE__, __LINE__)) break;
-                    printf("5");fflush(stdout);
-
                     if (retval = util::GRError(cudaMemcpy(
                         d_convertion_table,
                         convertion_table,
                         nodes * sizeof(VertexId),
                         cudaMemcpyHostToDevice),
                         "GraphSlice cudaMemcpy d_convertion_table failed", __FILE__, __LINE__)) break;
-                    printf("6");fflush(stdout);  
+                    */
 
                     // Allocate and initalize d_in_offset
-                    if (retval = util::GRError(cudaMalloc(
+                    if (retval = this->in_offset.Allocate(num_gpus+1,util::DEVICE)) break;
+                    if (retval = this->in_offset.Move    (util::HOST,util::DEVICE)) break;
+                    /*if (retval = util::GRError(cudaMalloc(
                         (void**)&(d_in_offset),
                         num_gpus * sizeof(SizeT)),
                         "GraphSlice cudaMalloc d_in_offset failed", __FILE__, __LINE__)) break;
-                    printf("7"); fflush(stdout);
-
                     if (retval = util::GRError(cudaMemcpy(
                         d_in_offset,
                         in_offset,
                         num_gpus * sizeof(SizeT),
                         cudaMemcpyHostToDevice),
                         "GraphSlice cudaMemcpy d_in_offset failed", __FILE__, __LINE__)) break;
-                    printf("8");fflush(stdout);
-
-                    // Allocate and initalize d_out_offset
-                    /*if (retval = util::GRError(cudaMalloc(
-                        (void**)&(d_out_offset),
-                        num_gpus * sizeof(SizeT)),
-                        "GraphSlice cudaMalloc d_out_offset failed", __FILE__, __LINE__)) break;
-                    printf("9"); fflush(stdout);
-
-                    if (retval = util::GRError(cudaMemcpy(
-                        d_out_offset,
-                        out_offset,
-                        num_gpus * sizeof(SizeT),
-                        cudaMemcpyHostToDevice),
-                        "GraphSlice cudaMemcpy d_out_offset failed", __FILE__, __LINE__)) break;
-                    printf("A"); fflush(stdout);*/
-               } // end if num_gpu>1
+                    */
+                } // end if num_gpu>1
             } while (0);
-            printf("GPUSlice Init finished.\n"); fflush(stdout);
+
             return retval;
-        }
+        } // end of Init(...)
      
-     /**
-     * @brief Performs any initialization work needed for GraphSlice. Must be called prior to each search
-     *
-     * @param[in] frontier_type The frontier type (i.e., edge/vertex/mixed)
-     * @param[in] queue_sizing Sizing scaling factor for work queue allocation. 1.0 by default. Reserved for future use.
-     *
-     * \return cudaError_t object which indicates the success of all CUDA function calls.
-     */
-    cudaError_t Reset(
-        FrontierType frontier_type,     // The frontier type (i.e., edge/vertex/mixed)
-        double queue_sizing)            // Size scaling factor for work queue allocation
+        /**
+         * @brief Performs any initialization work needed for GraphSlice. Must be called prior to each search
+         *
+         * @param[in] frontier_type The frontier type (i.e., edge/vertex/mixed)
+         * @param[in] queue_sizing Sizing scaling factor for work queue allocation. 1.0 by default. Reserved for future use.
+         *
+         * \return cudaError_t object which indicates the success of all CUDA function calls.
+         */
+        cudaError_t Reset(
+            FrontierType frontier_type,     // The frontier type (i.e., edge/vertex/mixed)
+            double queue_sizing)            // Size scaling factor for work queue allocation
         {
             cudaError_t retval = cudaSuccess;
 
@@ -371,7 +371,6 @@ struct ProblemBase
                     }
 
                     frontier_elements[i] = new_frontier_elements[i];
-                    printf(" GraphicSlice %d,%d \n",i,frontier_elements[i]);fflush(stdout);
 
                     if (retval = util::GRError(cudaMalloc(
                                      (void**) &(frontier_queues.d_keys[i]),
@@ -387,38 +386,25 @@ struct ProblemBase
             } // end for i<2
             
             return retval;
-        }
+        } // end Reset(...)
 
-    };
+    }; // end GraphSlice
 
     // Members
 public:
-    // Number of GPUs to be sliced over
-    int                 num_gpus;
-
-    // Device indices
-    int                 *gpu_idx;
-
-    // Size of the graph
-    SizeT               nodes;
+    int                 num_gpus;           // Number of GPUs to be sliced over
+    int                 *gpu_idx;           // Device indices
+    SizeT               nodes;              // Size of the graph
     SizeT               edges;
-
-    // Set of graph slices (one for each GPU)
-    GraphSlice**        graph_slices;
-
-    // Subgraphs for multi-gpu implementation
-    Csr<VertexId,Value,SizeT> *sub_graphs;
-
-    // Partitioner
-    PartitionerBase<VertexId,SizeT,Value> *partitioner;
-
-    // Multi-gpu partition table and convertion table
-    int                 **partition_tables;
+    GraphSlice          **graph_slices;       // Set of graph slices (one for each GPU)
+    Csr<VertexId,Value,SizeT> *sub_graphs;  // Subgraphs for multi-gpu implementation
+    PartitionerBase<VertexId,SizeT,Value> 
+                        *partitioner;       // Partitioner
+    int                 **partition_tables; // Multi-gpu partition table and convertion table
     SizeT               **convertion_tables;
-   
-    // Offsets for data movement between GPUs
-    SizeT               **in_offsets;
+    SizeT               **in_offsets;       // Offsets for data movement between GPUs
     SizeT               **out_offsets;               
+ 
     // Methods
 
     /**
@@ -442,17 +428,13 @@ public:
      */
     virtual ~ProblemBase()
     {
-        printf("~ProblemBase begin.\n"); fflush(stdout);
         // Cleanup graph slices on the heap
         for (int i = 0; i < num_gpus; ++i)
         {
             delete   graph_slices     [i  ]; graph_slices     [i  ] = NULL;
             if (num_gpus > 1)
             {
-                //delete   sub_graphs       [i  ]; sub_graphs       [i  ] = NULL;
-                //delete[] partition_tables [i+1]; partition_tables [i+1] = NULL;
                 free (partition_tables    [i+1]); partition_tables [i+1] = NULL;
-                //delete[] convertion_tables[i+1]; convertion_tables[i+1] = NULL;
                 free (convertion_tables   [i+1]); convertion_tables[i+1] = NULL;
                 delete[] out_offsets      [i  ]; out_offsets      [i  ] = NULL;
                 delete[] in_offsets       [i  ]; in_offsets       [i  ] = NULL;
@@ -464,7 +446,6 @@ public:
             delete[] convertion_tables[0];  convertion_tables[0] = NULL;
             delete[] partition_tables;      partition_tables     = NULL;
             delete[] convertion_tables;     convertion_tables    = NULL;
-            //delete[] graph_slices;          graph_slices         = NULL;
             delete[] out_offsets;           out_offsets          = NULL;
             delete[] in_offsets;            in_offsets           = NULL;
             delete   partitioner;           partitioner          = NULL;
@@ -472,7 +453,6 @@ public:
         }
         delete[] graph_slices; graph_slices = NULL;
         delete[] gpu_idx;      gpu_idx      = NULL;
-        printf("~ProblemBase end.\n"); fflush(stdout);
     }
 
     /**
@@ -491,7 +471,6 @@ public:
             // an ordinal other than 0.
             return graph_slices[0]->index;
         } else {
-            //return vertex % num_gpus;
             return partition_tables[0][vertex];
         }
     }
@@ -507,7 +486,6 @@ public:
     template <typename VertexId>
     VertexId GraphSliceRow(VertexId vertex)
     {
-        //return vertex / num_gpus;
         if (num_gpus <= 1) {
             return vertex;
         } else {
@@ -519,32 +497,20 @@ public:
      * @brief Initialize problem from host CSR graph.
      *
      * @param[in] stream_from_host Whether to stream data from host.
-     * @param[in] nodes Number of nodes in the CSR graph.
-     * @param[in] edges Number of edges in the CSR graph.
-     * @param[in] h_row_offsets Host-side row offsets array.
-     * @param[in] h_column_indices Host-side column indices array.
+     * @param[in] partition_method partitioning method
+     * @param[in] graph the input graph
      * @param[in] num_gpus Number of the GPUs used.
+     * @param[in] gpu_idx indexes of gpu
      *
      * \return cudaError_t object which indicates the success of all CUDA function calls.
      */
     cudaError_t Init(
         bool        stream_from_host,
         std::string partition_method,
-        /*SizeT       nodes,
-        SizeT       edges,
-        SizeT       *h_row_offsets,
-        VertexId    *h_column_indices,*/
         Csr<VertexId,Value,SizeT> &graph,
         int         num_gpus,
-        int*        gpu_idx
-        //Csr<VertexId,Value,SizeT>* &sub_graph,
-        //SizeT**     &incoming_offsets,
-        //SizeT**     &outgoing_offsets,
-        //int*        &partition_table,
-        //SizeT*      &convertion_table)
-        )
+        int*        gpu_idx)
     {
-        printf("ProblemBase Init begin.\n"); fflush(stdout);
         cudaError_t retval      = cudaSuccess;
         this->nodes             = graph.nodes;
         this->edges             = graph.edges;
@@ -559,142 +525,49 @@ public:
                 for (int gpu=0;gpu<num_gpus;gpu++)
                     this->gpu_idx[gpu]=gpu_idx[gpu];
             }
-            //printf("."); fflush(stdout);
+            
             graph_slices  = new GraphSlice*[num_gpus];
-            printf("graph_slices created.\n"); fflush(stdout);
-            //if (num_gpus <= 1) {
-                //SizeT    *h_row_offsets    = graph.row_offsets;
-                //VertexId *h_column_indices = graph.column_indices;
-                // Create a single graph slice for the currently-set gpu
-                //int gpu;
-                //if (retval = util::GRError(cudaGetDevice(&gpu), "ProblemBase cudaGetDevice failed", __FILE__, __LINE__)) break;
-                //graph_slices[0] = new GraphSlice(gpu_idx[gpu], 0);
-                //graph_slices[0]->nodes = nodes;
-                //graph_slices[0]->edges = edges;
-
-                //if (stream_from_host) {
-
-                    // Map the pinned graph pointers into device pointers
-                    //if (retval = util::GRError(cudaHostGetDevicePointer(
-                    //                (void **)&graph_slices[0]->d_row_offsets,
-                    //                (void *) h_row_offsets, 0),
-                    //            "ProblemBase cudaHostGetDevicePointer d_row_offsets failed", __FILE__, __LINE__)) break;
-
-                    //if (retval = util::GRError(cudaHostGetDevicePointer(
-                    //                (void **)&graph_slices[0]->d_column_indices,
-                    //                (void *) h_column_indices, 0),
-                    //            "ProblemBase cudaHostGetDevicePointer d_column_indices failed", __FILE__, __LINE__)) break;
-                //} else {
-
-                    // Allocate and initialize d_row_offsets
-                //    if (retval = util::GRError(cudaMalloc(
-                //        (void**)&graph_slices[0]->d_row_offsets,
-                //        (graph_slices[0]->nodes+1) * sizeof(SizeT)),
-                //        "ProblemBase cudaMalloc d_row_offsets failed", __FILE__, __LINE__)) break;
-
-                //    if (retval = util::GRError(cudaMemcpy(
-                //        graph_slices[0]->d_row_offsets,
-                //        h_row_offsets,
-                //        (graph_slices[0]->nodes+1) * sizeof(SizeT),
-                //        cudaMemcpyHostToDevice),
-                //        "ProblemBase cudaMemcpy d_row_offsets failed", __FILE__, __LINE__)) break;
-                    
-                    // Allocate and initialize d_column_indices
-                //    if (retval = util::GRError(cudaMalloc(
-                //        (void**)&graph_slices[0]->d_column_indices,
-                //        graph_slices[0]->edges * sizeof(VertexId)),
-                //        "ProblemBase cudaMalloc d_column_indices failed", __FILE__, __LINE__)) break;
-
-                //    if (retval = util::GRError(cudaMemcpy(
-                //        graph_slices[0]->d_column_indices,
-                //        h_column_indices,
-                //        graph_slices[0]->edges * sizeof(VertexId),
-                //        cudaMemcpyHostToDevice),
-                //        "ProblemBase cudaMemcpy d_column_indices failed", __FILE__, __LINE__)) break;
-
-
-
-                //} //end if(stream_from_host)
-            //} else {
-                if (num_gpus >1)
+            
+            if (num_gpus >1)
+            {
+                if (partition_method=="random") 
+                    partitioner=new rp::RandomPartitioner<VertexId, SizeT, Value>(graph,num_gpus);
+                else util::GRError("partition_method invalid", __FILE__,__LINE__);
+                
+                retval = partitioner->Partition(
+                    sub_graphs,
+                    partition_tables,
+                    convertion_tables,
+                    in_offsets,
+                    out_offsets);
+                if (retval) break;
+            } else {
+                sub_graphs=&graph;
+            }
+               
+            for (int gpu=0;gpu<num_gpus;gpu++)
+            {
+                graph_slices[gpu] = new GraphSlice(this->gpu_idx[gpu], 0);
+                if (num_gpus > 1)
                 {
-                    if (partition_method=="random") 
-                        partitioner=new rp::RandomPartitioner<VertexId, SizeT, Value>(graph,num_gpus);
-                    else util::GRError("partition_method invalid", __FILE__,__LINE__);
-                    printf("partitioner created.\n");fflush(stdout);
-                    retval = partitioner->Partition(
-                        sub_graphs,
-                        partition_tables,
-                        convertion_tables,
-                        in_offsets,
-                        out_offsets);
-                    printf("partitioner returned.\n");fflush(stdout);
-                    //graph.DisplayGraph("original graph");
-                    //util::cpu_mt::PrintCPUArray<SizeT,int  >("partition_table ", partition_tables [0], graph.nodes);
-                    //util::cpu_mt::PrintCPUArray<SizeT,Value>("convertion_table", convertion_tables[0], graph.nodes);
-                    /*for (int gpu=0;gpu<num_gpus;gpu++)
-                    {
-                        char name[128];
-                        sprintf(name,"sub_graphs[%d]",gpu);
-                        sub_graphs[gpu].DisplayGraph(name);
-                        util::cpu_mt::PrintCPUArray<SizeT,int  >("partition_table ", partition_tables [gpu+1], sub_graphs[gpu].nodes);
-                        util::cpu_mt::PrintCPUArray<SizeT,Value>("convertion_table", convertion_tables[gpu+1], sub_graphs[gpu].nodes);
-                        util::cpu_mt::PrintCPUArray<SizeT,SizeT>("in_offsets      ", in_offsets       [gpu  ], num_gpus+1);
-                        util::cpu_mt::PrintCPUArray<SizeT,SizeT>("out_offsets     ", out_offsets      [gpu  ], num_gpus+1);
-                    }*/
-                    if (retval) break;
-                } else {
-                    sub_graphs=&graph;
-                }
-                //this->sub_graphs       = sub_graphs;
-                //this->incoming_offsets = incoming_offsets;
-                //this->outgoing_offsets = outgoing_offsets;
-                //this->partition_table  = partition_table;
-                //this->convertion_table = convertion_table;
-                for (int gpu=0;gpu<num_gpus;gpu++)
-                {
-                    printf("gpu_idx[%d] = %d\n", gpu, this->gpu_idx[gpu]); fflush(stdout);
-                    graph_slices[gpu] = new GraphSlice(this->gpu_idx[gpu], 0);
-                    printf("graph_slice[%d] created.\n", gpu); fflush(stdout);
-                    if (num_gpus > 1)
-                    {
-                        printf("partition_tables [%d] = %p,%d\n",gpu+1,partition_tables [gpu+1],partition_tables [gpu+1][0]);fflush(stdout);
-                        printf("convertion_tables[%d] = %p,%d\n",gpu+1,convertion_tables[gpu+1],convertion_tables[gpu+1][0]);fflush(stdout);
-                        printf("in_offsets       [%d] = %p,%d\n",gpu  ,in_offsets       [gpu  ],in_offsets       [gpu  ][0]);fflush(stdout);
-                        printf("out_offsets      [%d] = %p,%d\n",gpu  ,out_offsets      [gpu  ],out_offsets      [gpu  ][0]);fflush(stdout);
-                        retval = graph_slices[gpu]->Init(
-                            stream_from_host,
-                            num_gpus,
-                            &(sub_graphs[gpu]),
-                            partition_tables [gpu+1],
-                            convertion_tables[gpu+1],
-                            in_offsets[gpu],
-                            out_offsets[gpu]);
-                    } else retval = graph_slices[gpu]->Init(
-                            stream_from_host,
-                            num_gpus,
-                            &(sub_graphs[gpu]),
-                            NULL,
-                            NULL,
-                            NULL,
-                            NULL);
-                    if (retval) break;
-                    /*graph_slices[gpu]->nodes = sub_graphs[gpu].nodes;
-                    graph_slices[gpu]->edges = sub_graphs[gpu].edges;
-                    if (num_gpus >1)
-                    {
-                        incoming_offsets[gpu]=new SizeT[num_gpus+1];
-                        outgoing_offsets[gpu]=new SizeT[num_gpus+1];
-                        incoming_offsets[gpu][0]=0;
-                        for (int tgpu=0;tgpu<num_gpus;tgpu++)
-                            incoming_offsets[gpu][tgpu+1]=incoming_offsets[gpu][tgpu]+foreign_count[tgpu*(num_gpus+1)+gpu];
-                        outgoing_offsets[gpu][num_gpus]=sub_graphs[gpu].nodes;
-                        for (int tgpu=num_gpus-1;tgpu>=0;tgpu--)
-                            outgoing_offsets[gpu][tgpu]=outgoing_offsets[gpu][tgpu+1]-foreign_count[gpu*(num_gpus+1)+tgpu];
-                    }*/
-                    //if (retval = util::GRError(cudaGetDevice(&gpu), "ProblemBase cudaGetDevice failed", __FILE__, __LINE__)) break;
-               }// end for (gpu)
-           // }//end if(num_gpu<=1)
+                    retval = graph_slices[gpu]->Init(
+                        stream_from_host,
+                        num_gpus,
+                        &(sub_graphs[gpu]),
+                        partition_tables [gpu+1],
+                        convertion_tables[gpu+1],
+                        in_offsets[gpu],
+                        out_offsets[gpu]);
+                } else retval = graph_slices[gpu]->Init(
+                        stream_from_host,
+                        num_gpus,
+                        &(sub_graphs[gpu]),
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL);
+               if (retval) break;
+            }// end for (gpu)
         } while (0);
 
         return retval;
@@ -711,85 +584,15 @@ public:
     cudaError_t Reset(
         FrontierType frontier_type,     // The frontier type (i.e., edge/vertex/mixed)
         double queue_sizing)            // Size scaling factor for work queue allocation
-        {
-            cudaError_t retval = cudaSuccess;
-
-            for (int gpu = 0; gpu < num_gpus; ++gpu) {
-                retval = graph_slices[gpu]->Reset(frontier_type,queue_sizing);
-                if (retval) break;
-                /*// Set device
-                if (retval = util::GRError(cudaSetDevice(graph_slices[gpu]->index),
-                            "ProblemBase cudaSetDevice failed", __FILE__, __LINE__)) return retval;
-
-
-                //
-                // Allocate frontier queues if necessary
-                //
-
-                // Determine frontier queue sizes
-                SizeT new_frontier_elements[2] = {0,0};
-
-                switch (frontier_type) {
-                    case VERTEX_FRONTIERS :
-                        // O(n) ping-pong global vertex frontiers
-                        new_frontier_elements[0] = double(graph_slices[gpu]->nodes) * queue_sizing;
-                        new_frontier_elements[1] = new_frontier_elements[0];
-                        break;
-
-                    case EDGE_FRONTIERS :
-                        // O(m) ping-pong global edge frontiers
-                        new_frontier_elements[0] = double(graph_slices[gpu]->edges) * queue_sizing;
-                        new_frontier_elements[1] = new_frontier_elements[0];
-                        break;
-
-                    case MIXED_FRONTIERS :
-                        // O(n) global vertex frontier, O(m) global edge frontier
-                        new_frontier_elements[0] = double(graph_slices[gpu]->nodes) * queue_sizing;
-                        new_frontier_elements[1] = double(graph_slices[gpu]->edges) * queue_sizing;
-                        break;
-
-                    }
-
-                // Iterate through global frontier queue setups
-                for (int i = 0; i < 2; i++) {
-
-                    // Allocate frontier queue if not big enough
-                    if (graph_slices[gpu]->frontier_elements[i] < new_frontier_elements[i]) {
-
-                        // Free if previously allocated
-                        if (graph_slices[gpu]->frontier_queues.d_keys[i]) {
-                            if (retval = util::GRError(cudaFree(
-                                            graph_slices[gpu]->frontier_queues.d_keys[i]),
-                                        "GpuSlice cudaFree frontier_queues.d_keys failed", __FILE__, __LINE__)) return retval;
-                        }
-
-                        // Free if previously allocated
-                        if (_USE_DOUBLE_BUFFER) {
-                            if (graph_slices[gpu]->frontier_queues.d_values[i]) {
-                                if (retval = util::GRError(cudaFree(
-                                                graph_slices[gpu]->frontier_queues.d_values[i]),
-                                            "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__)) return retval;
-                            }
-                        }
-
-                        graph_slices[gpu]->frontier_elements[i] = new_frontier_elements[i];
-
-                        if (retval = util::GRError(cudaMalloc(
-                                        (void**) &graph_slices[gpu]->frontier_queues.d_keys[i],
-                                        graph_slices[gpu]->frontier_elements[i] * sizeof(VertexId)),
-                                    "ProblemBase cudaMalloc frontier_queues.d_keys failed", __FILE__, __LINE__)) return retval;
-                        if (_USE_DOUBLE_BUFFER) {
-                            if (retval = util::GRError(cudaMalloc(
-                                            (void**) &graph_slices[gpu]->frontier_queues.d_values[i],
-                                            graph_slices[gpu]->frontier_elements[i] * sizeof(VertexId)),
-                                        "ProblemBase cudaMalloc frontier_queues.d_values failed", __FILE__, __LINE__)) return retval;
-                        }
-                    }
-                }*/
-            }
-            
-            return retval;
+    {
+        cudaError_t retval = cudaSuccess;
+        for (int gpu = 0; gpu < num_gpus; ++gpu) {
+            retval = graph_slices[gpu]->Reset(frontier_type,queue_sizing);
+            if (retval) break;
         }
+            
+        return retval;
+    }
 };
 
 } // namespace app

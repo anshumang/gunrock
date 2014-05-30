@@ -35,6 +35,7 @@ protected:
     util::CudaProperties cuda_props;
     
     // Queue size counters and accompanying functionality
+    // Move to indiviual Enactor classes to support multi GPU
     //util::CtaWorkProgressLifetime work_progress;
 
     FrontierType frontier_type;
@@ -80,31 +81,6 @@ protected:
         return max_grid_size;
     }
 
-/*public:
-    template <typename VertexId, typename SizeT, bool MARK_PREDECESSORS>
-    __global__ void Expand_Incoming (
-        const SizeT            num_elements,
-        const SizeT            num_associates,
-        const SizeT            incoming_offset,
-        const VertexId*  const keys_in,
-              VertexId*        keys_out,
-        const VertexId** const associate_in,
-              VertexId**       associate_out)
-    {
-        SizeT x = ((blockIdx.y*gridDim.x+blockIdx.x)*blockDim.y+threadIdx.y)*blockDim.x+threadIdx.x;
-        if (x>=num_elements) return;
-
-        VertexId key=keys_in[x];
-        keys_out[x]=key;
-        if (num_associates <1) return;
-        ... t=associate_in[0][incoming_offset+x];
-        if (t >= associate_out[0][key]) return;
-        associate_out[0][key]=t;
-        for (SizeT i=1;i<num_associates;i++)
-        {
-            associate_out[i][key]=associate_in[i][incoming_offset+x];   
-        }
-    }*/
 };
 
 

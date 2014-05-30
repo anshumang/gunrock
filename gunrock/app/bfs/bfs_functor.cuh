@@ -48,9 +48,11 @@ struct BFSFunctor
     {
         // Check if the destination node has been claimed as someone's child
         if (ProblemData::MARK_PREDECESSORS)
-            return (atomicCAS(&problem->d_preds[d_id], -2, s_id) == -2) ? true : false;
+            //return (atomicCAS(&problem->preds[d_id], -2, s_id) == -2) ? true : false;
+            return (atomicCAS(problem->preds+d_id, -2, s_id) == -2) ? true : false;
         else { 
-            return (atomicCAS(&problem->d_labels[d_id], -1, s_id+1) == -1) ? true : false;
+            //return (atomicCAS(&problem->labels[d_id], -1, s_id+1) == -1) ? true : false;
+            return (atomicCAS(problem->labels+d_id, -1, s_id+1) == -1)? true : false;
         }
     }
 
@@ -70,9 +72,11 @@ struct BFSFunctor
         if (ProblemData::MARK_PREDECESSORS) {
             VertexId label;
             util::io::ModifiedLoad<ProblemData::COLUMN_READ_MODIFIER>::Ld(
-                    label, problem->d_labels + s_id);
+                    label, problem->labels + s_id);
+            //        label, &problem->labels[s_id]);
             util::io::ModifiedStore<ProblemData::QUEUE_WRITE_MODIFIER>::St(
-                    label+1, problem->d_labels + d_id);
+                    label+1, problem->labels + d_id);
+            //        label+1, &problem->labels[d_id]);
         }
     }
 

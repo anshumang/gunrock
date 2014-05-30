@@ -186,6 +186,7 @@ struct Csr
         for (VertexId row = prev_row + 1; row <= nodes; row++) {
             row_offsets[row] = real_edge;
         }
+        edges = real_edge;
 
         if (new_coo) free(new_coo);
 

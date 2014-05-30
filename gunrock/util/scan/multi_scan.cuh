@@ -303,13 +303,13 @@ struct MultiScan
               SizeT*          d_Length,    // Length of each sub-array
               SizeT*          d_Result)    // The scan result
     {
-        SizeT *History_Size = new SizeT[10];
-        SizeT **d_Buffer    = new SizeT*[10];
+        SizeT *History_Size = new SizeT[20];
+        SizeT **d_Buffer    = new SizeT*[20];
         SizeT Current_Size  = Num_Elements;
         int   Current_Level = 0;
         dim3  Block_Size,Grid_Size;
 
-        for (int i=0;i<10;i++) d_Buffer[i]=NULL;
+        for (int i=0;i<20;i++) d_Buffer[i]=NULL;
         d_Buffer[0]=d_Result;
         History_Size[0] = Current_Size;
         History_Size[1] = Current_Size/BLOCK_SIZE;
@@ -399,7 +399,7 @@ struct MultiScan
         //Test_Array<SizeT,SizeT>(History_Size[1],Num_Rows,d_Buffer[1]);
         //Test_Array<SizeT,SizeT>(Num_Elements,1,d_Result);
 
-        for (int i=1;i<10;i++) 
+        for (int i=1;i<20;i++) 
         if (d_Buffer[i]!=NULL) 
         {
             util::GRError(cudaFree(d_Buffer[i]),
@@ -425,8 +425,8 @@ struct MultiScan
     {
         //printf("Scan_width_Keys begin. Num_Elements = %d \n", Num_Elements);fflush(stdout);
         if (Num_Elements <= 0) return;
-        SizeT *History_Size = new SizeT[10];
-        SizeT **d_Buffer    = new SizeT*[10];
+        SizeT *History_Size = new SizeT[20];
+        SizeT **d_Buffer    = new SizeT*[20];
         SizeT Current_Size  = Num_Elements;
         int   Current_Level = 0;
         dim3  Block_Size,Grid_Size;
@@ -435,11 +435,12 @@ struct MultiScan
         
         util::GRError(cudaMalloc((void**)&d_Offset1, sizeof(SizeT)*(Num_Rows+1)), "cudaMalloc d_Offset1 failed", __FILE__, __LINE__);
 
-        for (int i=0;i<10;i++) d_Buffer[i]=NULL;
-        d_Buffer[0]     = d_Result;
+        for (int i=0;i<20;i++) d_Buffer[i]=NULL;
         History_Size[0] = Current_Size;
         History_Size[1] = Current_Size/BLOCK_SIZE;
         if ((History_Size[0]%BLOCK_SIZE)!=0) History_Size[1]++;
+        util::GRError(cudaMalloc(&(d_Buffer[0]), sizeof(SizeT) * History_Size[0]),
+              "cudaMalloc d_Buffer[0] failed", __FILE__, __LINE__);
         util::GRError(cudaMalloc(&(d_Buffer[1]), sizeof(SizeT) * History_Size[1] * Num_Rows),
               "cudaMalloc d_Buffer[1] failed", __FILE__, __LINE__);
         //printf("Keys: "); Test_Array<SizeT, VertexId> (Num_Elements, 1, d_Keys);
@@ -544,7 +545,7 @@ struct MultiScan
         //Test_Array<SizeT,SizeT>(Num_Elements,1,d_Result);
         //printf("d_Offset: "); Test_Array<SizeT,SizeT>(Num_Rows+1,1,d_Offset);
 
-        for (int i=1;i<10;i++) 
+        for (int i=0;i<20;i++) 
         if (d_Buffer[i]!=NULL) 
         {
             util::GRError(cudaFree(d_Buffer[i]),

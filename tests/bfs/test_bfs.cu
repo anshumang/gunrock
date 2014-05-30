@@ -320,28 +320,28 @@ void RunTests(
             h_preds = (VertexId*)malloc(sizeof(VertexId) * graph.nodes);
         }
 
-        printf("RunTests begin.\n"); fflush(stdout);
+        //printf("RunTests begin.\n"); fflush(stdout);
         // Allocate BFS enactor map
-        BFSEnactor<INSTRUMENT>* bfs_enactor=new BFSEnactor<INSTRUMENT>(g_verbose);
-        printf("bfs_enactor created.\n"); fflush(stdout);
+        BFSEnactor<Problem, INSTRUMENT>* bfs_enactor=new BFSEnactor<Problem, INSTRUMENT>(g_verbose);
+        //printf("bfs_enactor created.\n"); fflush(stdout);
 
         // Allocate problem on GPU
         Problem *csr_problem = new Problem;
-        printf("problem created.\n"); fflush(stdout);
+        //printf("problem created.\n"); fflush(stdout);
 
         util::GRError(csr_problem->Init(
             g_stream_from_host,
             partition_method,
             graph,
             num_gpus,gpu_idx), "Problem BFS Initialization Failed", __FILE__, __LINE__);
-        printf("problem inited.\n"); fflush(stdout);
+        //printf("problem inited.\n"); fflush(stdout);
 
         //
         // Compute reference CPU BFS solution for source-distance
         //
         if (reference_check != NULL)
         {
-            printf("compute ref value\n");
+            //printf("compute ref value\n");
             SimpleReferenceBfs(
                     graph,
                     reference_check,
@@ -356,17 +356,18 @@ void RunTests(
         double              avg_duty = 0.0;
 
         // Perform BFS
-        GpuTimer gpu_timer;
+        CpuTimer cpu_timer;
 
         util::GRError(csr_problem->Reset(src, bfs_enactor->GetFrontierType(), max_queue_sizing), "BFS Problem Data Reset Failed", __FILE__, __LINE__);
-        printf("BFSProblem reseted.\n"); fflush(stdout);
-        gpu_timer.Start();
-        util::GRError(bfs_enactor->template Enact<Problem>(csr_problem, src, max_grid_size), "BFS Problem Enact Failed", __FILE__, __LINE__);
-        gpu_timer.Stop();
+        //printf("BFSProblem reseted.\n"); fflush(stdout);
+        cpu_timer.Start();
+        //util::GRError(bfs_enactor->template Enact<Problem>(csr_problem, src, max_grid_size), "BFS Problem Enact Failed", __FILE__, __LINE__);
+        util::GRError(bfs_enactor->Enact(csr_problem, src, max_grid_size), "BFS Problem Enact failed", __FILE__, __LINE__);
+        cpu_timer.Stop();
 
         bfs_enactor->GetStatistics(total_queued, search_depth, avg_duty);
 
-        float elapsed = gpu_timer.ElapsedMillis();
+        float elapsed = cpu_timer.ElapsedMillis();
 
         // Copy out results
         util::GRError(csr_problem->Extract(h_labels, h_preds), "BFS Problem Data Extraction Failed", __FILE__, __LINE__);
@@ -393,14 +394,14 @@ void RunTests(
 
         // Cleanup
         delete stats;
-        if (bfs_enactor)      {delete bfs_enactor;    bfs_enactor     =NULL;printf("bfs_enactor deleted.\n"   );fflush(stdout);}
-        if (csr_problem)      {delete csr_problem;    csr_problem     =NULL;printf("csr_problem deleted.\n"   );fflush(stdout);}
-        if (reference_labels) {free(reference_labels);reference_labels=NULL;printf("reference_labels freed.\n");fflush(stdout);}
-        if (h_labels)         {free(h_labels        );h_labels        =NULL;printf("h_labels freed.\n"        );fflush(stdout);}
-        if (h_preds)          {free(h_preds         );h_preds         =NULL;printf("h_preds freed.\n"         );fflush(stdout);}
+        if (bfs_enactor)      {delete bfs_enactor;    bfs_enactor     =NULL;}//printf("bfs_enactor deleted.\n"   );fflush(stdout);}
+        if (csr_problem)      {delete csr_problem;    csr_problem     =NULL;}//printf("csr_problem deleted.\n"   );fflush(stdout);}
+        if (reference_labels) {free(reference_labels);reference_labels=NULL;}//printf("reference_labels freed.\n");fflush(stdout);}
+        if (h_labels)         {free(h_labels        );h_labels        =NULL;}//printf("h_labels freed.\n"        );fflush(stdout);}
+        if (h_preds)          {free(h_preds         );h_preds         =NULL;}//printf("h_preds freed.\n"         );fflush(stdout);}
 
         cudaDeviceSynchronize();
-        printf("RunTests end.\n"); fflush(stdout);
+        //printf("RunTests end.\n"); fflush(stdout);
 }
 
 /**
@@ -432,7 +433,7 @@ void RunTests(
     std::string         partition_method    = "random";
     int*                gpu_idx             = NULL;
 
-    printf("RunTests begin.\n");fflush(stdout);
+    //printf("RunTests begin.\n");fflush(stdout);
 
     instrumented = args.CheckCmdLineFlag("instrumented");
     args.GetCmdLineArgument("src", src_str);
@@ -470,7 +471,7 @@ void RunTests(
         gpu_idx[0] = -1;
     }
 
-    printf("RunTests cmdLine reading finished.\n");fflush(stdout);
+    //printf("RunTests cmdLine reading finished.\n");fflush(stdout);
     if (instrumented) {
         if (mark_pred) {
             if (idempotence) {
@@ -557,7 +558,7 @@ void RunTests(
         }
     }
     delete[] gpu_idx;gpu_idx=NULL;
-    printf("RunTests returned.\n"); fflush(stdout);
+    //printf("RunTests returned.\n"); fflush(stdout);
 }
 
 
@@ -579,7 +580,7 @@ int main( int argc, char** argv)
 	cudaSetDeviceFlags(cudaDeviceMapHost);
 
 	//srand(0);									// Presently deterministic
-	//srand(time(NULL));
+	srand(time(NULL));
 
 	// Parse graph-contruction params
 	g_undirected = args.CheckCmdLineFlag("undirected");
@@ -630,6 +631,6 @@ int main( int argc, char** argv)
 
 	}
 
-        printf("Program ending.\n"); fflush(stdout);
+        //printf("Program ending.\n"); fflush(stdout);
 	return 0;
 }

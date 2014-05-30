@@ -16,6 +16,7 @@
 
 #include <gunrock/app/problem_base.cuh>
 #include <gunrock/util/memset_kernel.cuh>
+#include <gunrock/util/array_utils.cuh>
 
 namespace gunrock {
 namespace app {
@@ -52,84 +53,124 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
     struct DataSlice
     {
         // device storage arrays
-        VertexId        *d_labels;              /**< Used for source distance */
-        VertexId        *d_preds;               /**< Used for predecessor */
-        unsigned char   *d_visited_mask;        /**< used for bitmask for visited nodes */
+        //VertexId        *d_labels;              /**< Used for source distance */
+        util::Array1D<SizeT,VertexId > labels        ;
+        //VertexId        *d_preds;               /**< Used for predecessor */
+        util::Array1D<SizeT,VertexId > preds         ;
+        //unsigned char   *d_visited_mask;        /**< used for bitmask for visited nodes */
+        util::Array1D<SizeT,unsigned char > visited_mask  ;
         int             num_associate,gpu_idx;
-        VertexId        **d_associate_in;
-        VertexId        **h_associate_in;
-        VertexId        **d_associate_out;
-        VertexId        **h_associate_out;
-        VertexId        **d_associate_org;
-        VertexId        **h_associate_org;
-        SizeT           * d_out_length;
-        SizeT           * out_length;
-        SizeT           * in_length;
-        VertexId        * d_keys_in;
+        //VertexId        **d_associate_in;
+        //VertexId        **h_associate_in;
+        util::Array1D<SizeT,VertexId > *associate_in ;
+        util::Array1D<SizeT,VertexId*> associate_ins ;
+        //VertexId        **d_associate_out;
+        //VertexId        **h_associate_out;
+        util::Array1D<SizeT,VertexId > *associate_out;
+        util::Array1D<SizeT,VertexId*> associate_outs;
+        //VertexId        **d_associate_org;
+        //VertexId        **h_associate_org;
+        //util::Array1D<SizeT,VertexId > *associate_org;
+        util::Array1D<SizeT,VertexId*> associate_orgs;
+        //SizeT           * d_out_length;
+        //SizeT           * out_length;
+        util::Array1D<SizeT,SizeT    > out_length    ;
+        //SizeT           * in_length;
+        util::Array1D<SizeT,SizeT    > in_length     ;
+        //VertexId        * d_keys_in;
+        util::Array1D<SizeT,VertexId > keys_in       ;
 
         DataSlice()
         {
-            d_labels        = NULL;
-            d_preds         = NULL;
+            //d_labels        = NULL;
+            //d_preds         = NULL;
             num_associate   = 0;
             gpu_idx         = 0;
-            d_associate_in  = NULL;
-            h_associate_in  = NULL;
-            d_associate_out = NULL;
-            h_associate_out = NULL;
-            d_associate_org = NULL;
-            h_associate_org = NULL;
-            d_out_length    = NULL;
-            out_length      = NULL;
-            in_length       = NULL;
-            d_keys_in       = NULL;
+            associate_in    = NULL;
+            associate_out   = NULL;
+            //associate_org   = NULL;
+            labels        .SetName("labels"        );
+            preds         .SetName("preds"         );
+            visited_mask  .SetName("visited_mask"  );
+            associate_ins .SetName("associate_ins" );
+            associate_outs.SetName("associate_outs");
+            associate_orgs.SetName("associate_orgs");
+            out_length    .SetName("out_length"    );
+            in_length     .SetName("in_length"     );
+            keys_in       .SetName("keys_in"       );
+            //d_associate_in  = NULL;
+            //h_associate_in  = NULL;
+            //d_associate_out = NULL;
+            //h_associate_out = NULL;
+            //d_associate_org = NULL;
+            //h_associate_org = NULL;
+            //d_out_length    = NULL;
+            //out_length      = NULL;
+            //in_length       = NULL;
+            //d_keys_in       = NULL;
+            //d_visited_mask  = NULL;
         }
 
         ~DataSlice()
         {
-            printf("~DataSlice begin.\n"); fflush(stdout);
+            //printf("~DataSlice begin.\n"); fflush(stdout);
             util::GRError(cudaSetDevice(gpu_idx),
                 "~DataSlice cudaSetDevice failed", __FILE__, __LINE__);
-            if (d_labels) util::GRError(cudaFree(d_labels), "~DataSlice cudaFree d_labels failed", __FILE__, __LINE__);
-            if (d_preds ) util::GRError(cudaFree(d_preds ), "~DataSlice cudaFree d_preds failed" , __FILE__, __LINE__);
-            d_labels = NULL; d_preds = NULL;
-
-            if (h_associate_in != NULL)
+            //if (d_labels) util::GRError(cudaFree(d_labels), "~DataSlice cudaFree d_labels failed", __FILE__, __LINE__);
+            //if (d_preds ) util::GRError(cudaFree(d_preds ), "~DataSlice cudaFree d_preds failed" , __FILE__, __LINE__);
+            //d_labels = NULL; d_preds = NULL;
+            labels        .Release();
+            preds         .Release();
+            keys_in       .Release();
+            visited_mask  .Release();
+            in_length     .Release();
+            out_length    .Release();
+            associate_orgs.Release();
+ 
+            if (associate_in != NULL)
             {
                 for (int i=0;i<num_associate;i++)
-                util::GRError(cudaFree(h_associate_in[i]), "~DataSlice cudaFree h_associate_in failed", __FILE__, __LINE__);
-                util::GRError(cudaFree(d_associate_in   ), "~DataSlice cudaFree d_associate_in failed", __FILE__, __LINE__);
-                util::GRError(cudaFree(d_keys_in        ), "_DataSlice cudaFree d_keys_in failed",      __FILE__, __LINE__);
-                delete[] h_associate_in;
-                delete[] in_length;
-                h_associate_in = NULL;
-                d_associate_in = NULL;
-                in_length      = NULL;
-                d_keys_in      = NULL;
+                    associate_in[i].Release();
+                //util::GRError(cudaFree(h_associate_in[i]), "~DataSlice cudaFree h_associate_in failed", __FILE__, __LINE__);
+                //util::GRError(cudaFree(d_associate_in   ), "~DataSlice cudaFree d_associate_in failed", __FILE__, __LINE__);
+                //util::GRError(cudaFree(d_keys_in        ), "_DataSlice cudaFree d_keys_in failed",      __FILE__, __LINE__);
+                delete[] associate_in;
+                associate_in=NULL;
+                associate_ins.Release();
+                //delete[] h_associate_in;
+                //delete[] in_length;
+                //h_associate_in = NULL;
+                //d_associate_in = NULL;
+                //in_length      = NULL;
+                //d_keys_in      = NULL;
             }
 
-            if (h_associate_out != NULL)
+            if (associate_out != NULL)
             {
                 for (int i=0;i<num_associate;i++)
-                util::GRError(cudaFree(h_associate_out[i]), "~DataSlice cudaFree h_associate_out failed", __FILE__, __LINE__);
-                util::GRError(cudaFree(d_associate_out   ), "~DataSlice cudaFree d_associate_out failed", __FILE__, __LINE__);
-                util::GRError(cudaFree(d_out_length      ), "~DataSlice cudaFree d_out_length failed",    __FILE__, __LINE__);
-                delete[] h_associate_out;
-                delete[] out_length;
-                h_associate_out = NULL;
-                d_associate_out = NULL;
-                d_out_length    = NULL;
-                out_length      = NULL;
+                    associate_out[i].Release();
+                //util::GRError(cudaFree(h_associate_out[i]), "~DataSlice cudaFree h_associate_out failed", __FILE__, __LINE__);
+                //util::GRError(cudaFree(d_associate_out   ), "~DataSlice cudaFree d_associate_out failed", __FILE__, __LINE__);
+                //util::GRError(cudaFree(d_out_length      ), "~DataSlice cudaFree d_out_length failed",    __FILE__, __LINE__);
+                //delete[] h_associate_out;
+                delete[] associate_out;
+                associate_out=NULL;
+                associate_outs.Release();
+                //delete[] out_length;
+                //h_associate_out = NULL;
+                //d_associate_out = NULL;
+                //d_out_length    = NULL;
+                //out_length      = NULL;
             }
 
-            if (h_associate_org != NULL)
-            {
-                util::GRError(cudaFree(d_associate_org), "~DataSlice cudaFree d_associate_org failed", __FILE__, __LINE__);
-                delete[] h_associate_org;
-                d_associate_org = NULL;
-                h_associate_org = NULL;
-            }
-            printf("~DataSlice end.\n"); fflush(stdout);
+            //if (associate_org != NULL)
+            //{
+                //util::GRError(cudaFree(d_associate_org), "~DataSlice cudaFree d_associate_org failed", __FILE__, __LINE__);
+                //delete[] h_associate_org;
+                //d_associate_org = NULL;
+                //h_associate_org = NULL;
+            //}
+            //printf("~DataSlice end.\n"); fflush(stdout);
         }
 
         cudaError_t Init(
@@ -140,131 +181,120 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             SizeT num_in_nodes,
             SizeT num_out_nodes)
         {
-            printf("%d: DataSlice Init begin.\n", gpu_idx); fflush(stdout);
-
             cudaError_t retval = cudaSuccess;
             this->gpu_idx       = gpu_idx;
             this->num_associate = num_associate;
             if (retval = util::GRError(cudaSetDevice(gpu_idx), "DataSlice cudaSetDevice failed", __FILE__, __LINE__)) return retval;
             // Create SoA on device
-            if (retval = util::GRError(cudaMalloc((void**)&(d_labels),num_nodes * sizeof(VertexId)),
-                            "DataSlice cudaMalloc d_labels failed", __FILE__, __LINE__)) return retval;
+            if (retval = labels.Allocate(num_nodes,util::DEVICE)) return retval;
+            //if (retval = util::GRError(cudaMalloc((void**)&(d_labels),num_nodes * sizeof(VertexId)),
+            //                "DataSlice cudaMalloc d_labels failed", __FILE__, __LINE__)) return retval;
 
             if (_MARK_PREDECESSORS) 
             {
-                if (retval = util::GRError(cudaMalloc((void**)&(d_preds),num_nodes * sizeof(VertexId)),
-                                "DataSlice cudaMalloc d_preds failed", __FILE__, __LINE__)) return retval;
+                if (retval = preds.Allocate(num_nodes,util::DEVICE)) return retval;
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_preds),num_nodes * sizeof(VertexId)),
+                //                "DataSlice cudaMalloc d_preds failed", __FILE__, __LINE__)) return retval;
             }
 
             if (num_associate != 0)
             {
-                printf("%d: num_associate = %d\n", gpu_idx, num_associate);
-                h_associate_org = new VertexId*[num_associate];
-                h_associate_org[0] = d_labels;
-                if (_MARK_PREDECESSORS) h_associate_org[1] = d_preds;
-                if (retval = util::GRError(cudaMalloc((void**)&(d_associate_org), num_associate * sizeof(VertexId*)),
-                                "DataSlice cudaMalloc d_associate_org failed", __FILE__, __LINE__)) return retval;
-                if (retval = util::GRError(cudaMemcpy(d_associate_org, h_associate_org, 
-                                num_associate * sizeof(VertexId*), cudaMemcpyHostToDevice),
-                                "DataSlice cudaMemcpy d_associate_org failed", __FILE__, __LINE__)) return retval;
+                //h_associate_org = new VertexId*[num_associate];
+                //h_associate_org[0] = d_labels;
+                if (retval = associate_orgs.Allocate(num_associate, util::HOST | util::DEVICE)) return retval;
+                associate_orgs[0]=labels.GetPointer(util::DEVICE);
+                if (_MARK_PREDECESSORS) 
+                    //h_associate_org[1] = d_preds;
+                    associate_orgs[1]=preds.GetPointer(util::DEVICE);
+                if (retval = associate_orgs.Move(util::HOST,util::DEVICE)) return retval;
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_associate_org), num_associate * sizeof(VertexId*)),
+                //                "DataSlice cudaMalloc d_associate_org failed", __FILE__, __LINE__)) return retval;
+                //if (retval = util::GRError(cudaMemcpy(d_associate_org, h_associate_org, 
+                //                num_associate * sizeof(VertexId*), cudaMemcpyHostToDevice),
+                //                "DataSlice cudaMemcpy d_associate_org failed", __FILE__, __LINE__)) return retval;
             }
+
+            if (retval = in_length.Allocate(num_gpus,util::HOST)) return retval;
             // Create incoming buffer on device
             if (num_in_nodes > 0)
             {
-                printf("%d: num_in_nodes = %d\n", gpu_idx, num_in_nodes); fflush(stdout);
-                h_associate_in = new VertexId*[num_associate];
+                //h_associate_in = new VertexId*[num_associate];
+                associate_in=new util::Array1D<SizeT,VertexId>[num_associate];
+                associate_ins.SetName("associate_ins");
+                if (retval = associate_ins.Allocate(num_associate, util::DEVICE | util::HOST)) return retval;
                 for (int i=0;i<num_associate;i++)
                 {
-                    if (retval = util::GRError(cudaMalloc((void**)&(h_associate_in[i]),num_in_nodes * sizeof(VertexId)),
-                                    "DataSlice cudamalloc h_associate_in failed", __FILE__, __LINE__)) break;
+                    associate_in[i].SetName("associate_ins[]");
+                    if (retval = associate_in[i].Allocate(num_in_nodes,util::DEVICE)) return retval;
+                    associate_ins[i]=associate_in[i].GetPointer(util::DEVICE);
+                    //if (retval = util::GRError(cudaMalloc((void**)&(h_associate_in[i]),num_in_nodes * sizeof(VertexId)),
+                    //                "DataSlice cudamalloc h_associate_in failed", __FILE__, __LINE__)) break;
                 }
-                if (retval) return retval;
-                if (retval = util::GRError(cudaMalloc((void**)&(d_associate_in),num_associate * sizeof(VertexId*)),
-                                "DataSlice cuaaMalloc d_associate_in failed", __FILE__, __LINE__)) return retval;
-                if (retval = util::GRError(cudaMalloc((void**)&(d_keys_in     ), num_in_nodes * sizeof(VertexId)),
-                                "DataSlice cudaMalloc d_key_in failed",       __FILE__, __LINE__)) return retval;
-                if (retval = util::GRError(cudaMemcpy(d_associate_in, h_associate_in,
-                                num_associate * sizeof(VertexId*),cudaMemcpyHostToDevice),
-                                "DataSlice cudaMemcpy d_associate_in failed", __FILE__, __LINE__)) return retval;
-                in_length  = new SizeT[num_gpus];
-                memset(in_length,0,sizeof(SizeT)*num_gpus);
-                //if (retval = util::GRError(cudaMalloc((void**)&(d_in_length),  num_gpus * sizeof(SizeT)),
-                //                "DataSlice cudaMalloc d_in_length failed",    __FILE__, __LINE__)) return retval;
+                if (retval = associate_ins.Move(util::HOST,util::DEVICE)) return retval;
+                if (retval = keys_in.Allocate(num_in_nodes,util::DEVICE)) return retval;
+                //if (retval) return retval;
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_associate_in),num_associate * sizeof(VertexId*)),
+                //                "DataSlice cuaaMalloc d_associate_in failed", __FILE__, __LINE__)) return retval;
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_keys_in     ), num_in_nodes * sizeof(VertexId)),
+                //                "DataSlice cudaMalloc d_key_in failed",       __FILE__, __LINE__)) return retval;
+                //if (retval = util::GRError(cudaMemcpy(d_associate_in, h_associate_in,
+                //                num_associate * sizeof(VertexId*),cudaMemcpyHostToDevice),
+                //                "DataSlice cudaMemcpy d_associate_in failed", __FILE__, __LINE__)) return retval;
+                //in_length  = new SizeT[num_gpus];
+                //memset(in_length,0,sizeof(SizeT)*num_gpus);
             }
 
              // Create outgoing buffer on device
             if (num_out_nodes > 0)
             {
-                printf("%d: num_out_nodes = %d\n", gpu_idx, num_out_nodes); fflush(stdout);
-                h_associate_out = new VertexId*[num_associate];
+                //h_associate_out = new VertexId*[num_associate];
+                associate_out=new util::Array1D<SizeT,VertexId>[num_associate];
+                associate_outs.SetName("associate_outs");
+                if (retval = associate_outs.Allocate(num_associate, util::HOST | util::DEVICE)) return retval;
                 for (int i=0;i<num_associate;i++)
                 {
-                    if (retval = util::GRError(cudaMalloc((void**)&(h_associate_out[i]),num_out_nodes * sizeof(VertexId)),
-                                     "DataSlice cudamalloc h_associate_out failed", __FILE__, __LINE__)) break;
+                    associate_out[i].SetName("associate_out[]");
+                    if (retval = associate_out[i].Allocate(num_out_nodes, util::DEVICE)) return retval;
+                    associate_outs[i]=associate_out[i].GetPointer(util::DEVICE);
+                    //if (retval = util::GRError(cudaMalloc((void**)&(h_associate_out[i]),num_out_nodes * sizeof(VertexId)),
+                    //                 "DataSlice cudamalloc h_associate_out failed", __FILE__, __LINE__)) break;
                 }
-                if (retval) return retval;
-                if (retval = util::GRError(cudaMalloc((void**)&(d_associate_out),num_associate * sizeof(VertexId*)),
-                                "DataSlice cuaaMalloc d_associate_out failed", __FILE__, __LINE__)) return retval;
-                if (retval = util::GRError(cudaMemcpy(d_associate_out, h_associate_out,
-                                num_associate * sizeof(VertexId*),cudaMemcpyHostToDevice),
-                                "DataSlice cudaMemcpy d_associate_out failed", __FILE__, __LINE__)) return retval;
-                out_length = new SizeT[num_gpus];
-                memset(out_length, 0, sizeof(SizeT)*num_gpus);
-                if (retval = util::GRError(cudaMalloc((void**)&(d_out_length), num_gpus * sizeof(SizeT)),
-                                "DataSlice cuaMalloc d_out_length failed",     __FILE__, __LINE__)) return retval;
+                if (retval = associate_outs.Move(util::HOST, util::DEVICE)) return retval;
+                if (retval = out_length.Allocate(num_gpus,util::HOST | util::DEVICE)) return retval;
+                //if (retval) return retval;
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_associate_out),num_associate * sizeof(VertexId*)),
+                //                "DataSlice cuaaMalloc d_associate_out failed", __FILE__, __LINE__)) return retval;
+                //if (retval = util::GRError(cudaMemcpy(d_associate_out, h_associate_out,
+                //                num_associate * sizeof(VertexId*),cudaMemcpyHostToDevice),
+                //                "DataSlice cudaMemcpy d_associate_out failed", __FILE__, __LINE__)) return retval;
+                //out_length = new SizeT[num_gpus];
+                //memset(out_length, 0, sizeof(SizeT)*num_gpus);
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_out_length), num_gpus * sizeof(SizeT)),
+                //                "DataSlice cuaMalloc d_out_length failed",     __FILE__, __LINE__)) return retval;
             }
-            printf("%d: DataSlice Init finished.\n", gpu_idx); fflush(stdout);
             return retval;
-        }
-    };
+        } // Init
+    }; // DataSlice
 
     // Members
     
-    // Number of GPUs to be sliced over
-//    int                 num_gpus;
-
-    // Size of the graph
-//    SizeT               nodes;
-//    SizeT               edges;
-
     // Set of data slices (one for each GPU)
-    DataSlice           **data_slices;
+    //DataSlice           **data_slices;
+    util::Array1D<SizeT,DataSlice> *data_slices;
    
     // Nasty method for putting struct on device
     // while keeping the SoA structure
-    DataSlice           **d_data_slices;
-
-    // Device indices for each data slice
-//    int                 *gpu_idx;
-
-    // Subgraphs for multi-gpu implementation
-//    Csr<VertexId, Value, SizeT> *sub_graphs;
-
-    // Multi-gpu partition table and convertion table
-//    int                 *partition_table;
-//    SizeT               *convertion_table;
-
-    // Offsets for data movement between GPUs
-//    SizeT               **outgoing_offsets;
-//    SizeT               **incoming_offsets;
+    //DataSlice           **d_data_slices;
 
     // Methods
 
     /**
      * @brief BFSProblem default constructor
      */
-
-    BFSProblem()//:
-    //nodes(0),
-    //edges(0),
-    //num_gpus(0) 
+    BFSProblem()
     {
         data_slices      = NULL;
-        d_data_slices    = NULL;
-        //gpu_idx          = NULL;
-        //sub_graphs       = NULL;
-        //incoming_offsets = NULL;
-        //outgoing_offsets = NULL;
+        //d_data_slices    = NULL;
     }
 
     /**
@@ -278,8 +308,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                std::string partition_method,
                const Csr<VertexId, Value, SizeT> &graph,
                int         num_gpus,
-               int*        gpu_idx)// :
-        //num_gpus(num_gpus)
+               int*        gpu_idx)
     {
         Init(
             stream_from_host,
@@ -294,21 +323,17 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
      */
     ~BFSProblem()
     {
-        printf("~BFSProblem begin.\n");fflush(stdout);
+        if (data_slices==NULL) return;
         for (int i = 0; i < this->num_gpus; ++i)
         {
-            delete data_slices[i]; data_slices[i]=NULL;
+            //delete data_slices[i]; data_slices[i]=NULL;
             if (util::GRError(cudaSetDevice(this->gpu_idx[i]),
                 "~BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) break;
-            //if (data_slices[i]->d_labels)    util::GRError(cudaFree(data_slices[i]->d_labels), "GpuSlice cudaFree d_labels failed", __FILE__, __LINE__);
-            //if (data_slices[i]->d_preds)     util::GRError(cudaFree(data_slices[i]->d_preds),  "GpuSlice cudaFree d_preds failed", __FILE__, __LINE__);
-            //if (data_slices[i]->d_ibuffer)   util::GRError(cudaFree(data_slices[i]->d_ibuffer), "GpuSlice cudaFree d_ibuffer failed",__FILE__, __LINE__);
-            //if (data_slices[i]->d_obuffer)   util::GRError(cudaFree(data_slices[i]->d_obuffer), "GpuSlice cudaFree d_obuffer failed", __FILE__, __LINE__);
-            if (d_data_slices[i]) util::GRError(cudaFree(d_data_slices[i]), "~BFSProblem cudaFree data_slices failed", __FILE__, __LINE__);
+            data_slices[i].Release();
+            //if (d_data_slices[i]) util::GRError(cudaFree(d_data_slices[i]), "~BFSProblem cudaFree data_slices failed", __FILE__, __LINE__);
         }
-        if (d_data_slices) delete[] d_data_slices; d_data_slices=NULL;
+        //if (d_data_slices) delete[] d_data_slices; d_data_slices=NULL;
         if (data_slices  ) delete[] data_slices; data_slices=NULL;
-        printf("~BFSProblem end.\n");fflush(stdout);
     }
 
     /**
@@ -335,20 +360,24 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                 if (util::GRError(cudaSetDevice(this->gpu_idx[0]),
                             "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) break;
 
-                if (retval = util::GRError(cudaMemcpy(
-                                h_labels,
-                                data_slices[0]->d_labels,
-                                sizeof(VertexId) * this->nodes,
-                                cudaMemcpyDeviceToHost),
-                            "BFSProblem cudaMemcpy d_labels failed", __FILE__, __LINE__)) break;
+                data_slices[0]->labels.SetPointer(h_labels);
+                if (retval = data_slices[0]->labels.Move(util::DEVICE,util::HOST)) return retval;
+                //if (retval = util::GRError(cudaMemcpy(
+                //                h_labels,
+                //                data_slices[0]->d_labels,
+                //                sizeof(VertexId) * this->nodes,
+                //                cudaMemcpyDeviceToHost),
+                //            "BFSProblem cudaMemcpy d_labels failed", __FILE__, __LINE__)) break;
 
                 if (_MARK_PREDECESSORS) {
-                    if (retval = util::GRError(cudaMemcpy(
-                                    h_preds,
-                                    data_slices[0]->d_preds,
-                                    sizeof(VertexId) * this->nodes,
-                                    cudaMemcpyDeviceToHost),
-                                "BFSProblem cudaMemcpy d_preds failed", __FILE__, __LINE__)) break;
+                    data_slices[0]->preds.SetPointer(h_preds);
+                    if (retval = data_slices[0]->preds.Move(util::DEVICE,util::HOST)) return retval;
+                    //if (retval = util::GRError(cudaMemcpy(
+                    //                h_preds,
+                    //                data_slices[0]->d_preds,
+                    //                sizeof(VertexId) * this->nodes,
+                    //                cudaMemcpyDeviceToHost),
+                    //            "BFSProblem cudaMemcpy d_preds failed", __FILE__, __LINE__)) break;
                 }
 
             } else {
@@ -356,26 +385,31 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                 VertexId **th_preds =new VertexId*[this->num_gpus];
                 for (int gpu=0;gpu<this->num_gpus;gpu++)
                 {
-                    th_labels[gpu]=new VertexId[this->out_offsets[gpu][1]];
-                    th_preds [gpu]=new VertexId[this->out_offsets[gpu][1]];
+                    //th_labels[gpu]=new VertexId[this->out_offsets[gpu][1]];
+                    //th_preds [gpu]=new VertexId[this->out_offsets[gpu][1]];
 
-                    if (util::GRError(cudaSetDevice(this->gpu_idx[gpu]),
-                                "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) break;
-                    if (retval = util::GRError(cudaMemcpy(
-                                    th_labels[gpu],
-                                    data_slices[gpu]->d_labels,
-                                    sizeof(VertexId) * this->out_offsets[gpu][1],
-                                    cudaMemcpyDeviceToHost),
-                                "BFSProblem cudaMemcpy d_labels failed", __FILE__, __LINE__)) break;
+                    if (retval = util::GRError(cudaSetDevice(this->gpu_idx[gpu]),
+                                "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) return retval;
+                    if (retval = data_slices[gpu]->labels.Move(util::DEVICE,util::HOST)) return retval;
+                    th_labels[gpu]=data_slices[gpu]->labels.GetPointer(util::HOST);
+                    //if (retval = util::GRError(cudaMemcpy(
+                    //                th_labels[gpu],
+                    //                data_slices[gpu]->d_labels,
+                    //                sizeof(VertexId) * this->out_offsets[gpu][1],
+                    //                cudaMemcpyDeviceToHost),
+                    //            "BFSProblem cudaMemcpy d_labels failed", __FILE__, __LINE__)) break;
                     if (_MARK_PREDECESSORS) {
-                        if (retval = util::GRError(cudaMemcpy(
-                                        th_preds[gpu],
-                                        data_slices[gpu]->d_preds,
-                                        sizeof(VertexId) * this->out_offsets[gpu][1],
-                                        cudaMemcpyDeviceToHost),
-                                     "BFSProblem cudaMemcpy d_preds failed", __FILE__, __LINE__)) break;
+                        if (retval = data_slices[gpu]->preds.Move(util::DEVICE,util::HOST)) return retval;
+                        th_preds[gpu]=data_slices[gpu]->preds.GetPointer(util::HOST);
+                        //if (retval = util::GRError(cudaMemcpy(
+                        //                th_preds[gpu],
+                        //                data_slices[gpu]->d_preds,
+                        //                sizeof(VertexId) * this->out_offsets[gpu][1],
+                        //                cudaMemcpyDeviceToHost),
+                        //             "BFSProblem cudaMemcpy d_preds failed", __FILE__, __LINE__)) break;
                     }
                 } //end for(gpu)
+
                 for (VertexId node=0;node<this->nodes;node++)
                     h_labels[node]=th_labels[this->partition_tables[0][node]][this->convertion_tables[0][node]];
                 if (_MARK_PREDECESSORS)
@@ -383,8 +417,10 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                         h_preds[node]=th_preds[this->partition_tables[0][node]][this->convertion_tables[0][node]];
                 for (int gpu=0;gpu<this->num_gpus;gpu++)
                 {
-                    delete[] th_labels[gpu];th_labels[gpu]=NULL;
-                    delete[] th_preds [gpu];th_preds [gpu]=NULL;
+                    if (retval = data_slices[gpu]->labels.Release(util::HOST)) return retval;
+                    if (retval = data_slices[gpu]->preds.Release(util::HOST)) return retval;
+                    //delete[] th_labels[gpu];th_labels[gpu]=NULL;
+                    //delete[] th_preds [gpu];th_preds [gpu]=NULL;
                 }
                 delete[] th_labels;th_labels=NULL;
                 delete[] th_preds ;th_preds =NULL;
@@ -410,102 +446,66 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             int             num_gpus,
             int*            gpu_idx)
     {
-        //this->num_gpus = _num_gpus;
-        //this->nodes    = graph.nodes;
-        //this->edges    = graph.edges;
-        //VertexId *h_row_offsets = graph.row_offsets;
-        //VertexId *h_column_indices = graph.column_indices;
-        printf("BFSProblem Init begin.\n"); fflush(stdout);
-
         ProblemBase<VertexId, SizeT,Value,_USE_DOUBLE_BUFFER>::Init(
             stream_from_host,
             partition_method,
-            /*nodes,
-            edges,
-            h_row_offsets,
-            h_column_indices,*/
             graph,
-            num_gpus,gpu_idx
-            //sub_graphs,
-            //incoming_offsets,
-            //outgoing_offsets,
-            //partition_table,
-            //convertion_table);
-            );
-        printf("ProblemBase Init returned.\n"); fflush(stdout); 
+            num_gpus,
+            gpu_idx);
         // No data in DataSlice needs to be copied from host
 
         /**
          * Allocate output labels/preds
          */
         cudaError_t retval = cudaSuccess;
-        data_slices   = new DataSlice*[this->num_gpus];
-        d_data_slices = new DataSlice*[this->num_gpus];
+        data_slices = new util::Array1D<SizeT,DataSlice>[this->num_gpus];
+        //data_slices   = new DataSlice*[this->num_gpus];
+        //d_data_slices = new DataSlice*[this->num_gpus];
 
         do {
-            //if (this->num_gpus <= 1) {
-                //gpu_idx = (int*)malloc(sizeof(int));
-                // Create a single data slice for the currently-set gpu
-                //int gpu;
-                //if (retval = util::GRError(cudaGetDevice(&gpu), "BFSProblem cudaGetDevice failed", __FILE__, __LINE__)) break;
-                //gpu_idx[0] = gpu;
-
-                //data_slices[0] = new DataSlice;
-                //if (retval = util::GRError(cudaMalloc(
-                //                (void**)&d_data_slices[0],
-                //                sizeof(DataSlice)),
-                //            "BFSProblem cudaMalloc d_data_slices failed", __FILE__, __LINE__)) return retval;
-
-                // Create SoA on device
-                //VertexId    *d_labels;
-                //if (retval = util::GRError(cudaMalloc(
-                //        (void**)&d_labels,
-                //        this->nodes * sizeof(VertexId)),
-                //    "BFSProblem cudaMalloc d_labels failed", __FILE__, __LINE__)) return retval;
-                //data_slices[0]->d_labels = d_labels;
- 
-                //VertexId   *d_preds = NULL;
-                //if (_MARK_PREDECESSORS) {
-                //    if (retval = util::GRError(cudaMalloc(
-                //        (void**)&d_preds,
-                //        this->nodes * sizeof(VertexId)),
-                //    "BFSProblem cudaMalloc d_preds failed", __FILE__, __LINE__)) return retval;
-                //}
-                //data_slices[0]->d_preds = d_preds;
-            //} else {
-                //gpu_idx = (int*) malloc(sizeof(int)*this->num_gpus);
-                //if (num_gpus==1) this->sub_graphs[0]=graph;
-
-                for (int gpu=0;gpu<this->num_gpus;gpu++)
+            for (int gpu=0;gpu<this->num_gpus;gpu++)
+            {
+                data_slices[gpu].SetName("data_slices[]");
+                if (retval = util::GRError(cudaSetDevice(this->gpu_idx[gpu]), "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) return retval;
+                if (retval = data_slices[gpu].Allocate(1,util::DEVICE | util::HOST)) return retval;
+                //data_slices[gpu] = new DataSlice;
+                //if (retval = util::GRError(cudaMalloc((void**)&(d_data_slices[gpu]),sizeof(DataSlice)),
+                //               "BFSProblem cudaMalloc d_data_slices failed", __FILE__, __LINE__)) return retval;
+                //printf("0");fflush(stdout);
+                DataSlice* _data_slice = data_slices[gpu].GetPointer(util::HOST);
+                /*printf("1");fflush(stdout);
+                SizeT      _nodes      = this->sub_graphs[gpu].nodes;
+                printf("2");fflush(stdout);
+                int        _num_gpus   = this->num_gpus;
+                printf("3");fflush(stdout);
+                int        _gpu_idx    = this->gpu_idx[gpu];
+                printf("4");fflush(stdout);
+                SizeT      _in_offset  = this->graph_slices[gpu]->in_offset[this->num_gpus];
+                printf("5");fflush(stdout);
+                SizeT      _out_offset = this->graph_slices[gpu]->out_offset[this->num_gpus]-this->graph_slices[gpu]->out_offset[1];
+                printf("pointer = %p, _num_gpus = %d, _gpu_idx = %d, _nodes = %d, _in_offset = %d, _out_offset = %d\n",_data_slice, _num_gpus, _gpu_idx, _nodes, _in_offset, _out_offset);fflush(stdout);*/
+                if (this->num_gpus > 1)
                 {
-                    if (retval = util::GRError(cudaSetDevice(this->gpu_idx[gpu]), "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) break;
-                    //gpu_idx    [gpu] = gpu;
-                    data_slices[gpu] = new DataSlice;
-                    if (retval = util::GRError(cudaMalloc(
-                                    (void**)&(d_data_slices[gpu]),
-                                    sizeof(DataSlice)),
-                                 "BFSProblem cudaMalloc d_data_slices failed", __FILE__, __LINE__)) return retval;
-
-                    if (this->num_gpus > 1)
-                    {
-                        if (_MARK_PREDECESSORS)
-                            data_slices[gpu]->Init(this->num_gpus, this->gpu_idx[gpu], 2, 
-                                this->sub_graphs[gpu].nodes,
-                                this->graph_slices[gpu]->in_offset[this->num_gpus],
-                                this->graph_slices[gpu]->out_offset[this->num_gpus]-this->graph_slices[gpu]->out_offset[1]);
-                        else   data_slices[gpu]->Init(this->num_gpus, this->gpu_idx[gpu], 1, 
-                                this->sub_graphs[gpu].nodes,
-                                this->graph_slices[gpu]->in_offset[this->num_gpus],
-                                this->graph_slices[gpu]->out_offset[this->num_gpus]-this->graph_slices[gpu]->out_offset[1]);
-                    } else {
-                        data_slices[gpu]->Init(this->num_gpus,this->gpu_idx[gpu], 0,
-                            this->sub_graphs[gpu].nodes, 0, 0);
-                    } 
-                } //end for(gpu)
+                    if (_MARK_PREDECESSORS)
+                        //data_slices[gpu]->Init(this->num_gpus, this->gpu_idx[gpu], 2, 
+                        _data_slice->Init(this->num_gpus,this->gpu_idx[gpu], 2,
+                            this->sub_graphs[gpu].nodes,
+                            this->graph_slices[gpu]->in_offset[this->num_gpus],
+                            this->graph_slices[gpu]->out_offset[this->num_gpus]-this->graph_slices[gpu]->out_offset[1]);
+                    else   //data_slices[gpu]->Init(this->num_gpus, this->gpu_idx[gpu], 1, 
+                          _data_slice->Init(this->num_gpus, this->gpu_idx[gpu], 1,
+                            this->sub_graphs[gpu].nodes,
+                            this->graph_slices[gpu]->in_offset[this->num_gpus],
+                            this->graph_slices[gpu]->out_offset[this->num_gpus]-this->graph_slices[gpu]->out_offset[1]);
+                } else {
+                    //data_slices[gpu]->Init(this->num_gpus,this->gpu_idx[gpu], 0,
+                    _data_slice->Init(this->num_gpus, this->gpu_idx[gpu], 0,
+                        this->sub_graphs[gpu].nodes, 0, 0);
+                }
+            } //end for(gpu)
             //} // end if (num_gpus)
         } while (0);
         
-        printf("BFSProblem Inited.\n"); fflush(stdout);
         return retval;
     }
 
@@ -536,41 +536,49 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                         "BSFProblem cudaSetDevice failed", __FILE__, __LINE__)) return retval;
 
             // Allocate output labels if necessary
-            if (!data_slices[gpu]->d_labels) {
-                VertexId    *d_labels;
-                if (retval = util::GRError(cudaMalloc(
-                                (void**)&d_labels,
-                                this->sub_graphs[gpu].nodes * sizeof(VertexId)),
-                            "BFSProblem cudaMalloc d_labels failed", __FILE__, __LINE__)) return retval;
-                data_slices[gpu]->d_labels = d_labels;
-            }
+            if (data_slices[gpu]->labels.GetPointer(util::DEVICE)==NULL)
+                if (retval = data_slices[gpu]->labels.Allocate(this->sub_graphs[gpu].nodes,util::DEVICE)) return retval;
+            //if (!data_slices[gpu]->d_labels) {
+            //    VertexId    *d_labels;
+            //    if (retval = util::GRError(cudaMalloc(
+            //                    (void**)&d_labels,
+            //                    this->sub_graphs[gpu].nodes * sizeof(VertexId)),
+            //                "BFSProblem cudaMalloc d_labels failed", __FILE__, __LINE__)) return retval;
+            //    data_slices[gpu]->d_labels = d_labels;
+            //}
 
-            util::MemsetKernel<<<128, 128>>>(data_slices[gpu]->d_labels, -1, this->sub_graphs[gpu].nodes);
+            //util::MemsetKernel<<<128, 128>>>(data_slices[gpu]->d_labels, -1, this->sub_graphs[gpu].nodes);
+            util::MemsetKernel<<<128, 128>>>(data_slices[gpu]->labels.GetPointer(util::DEVICE), -1, this->sub_graphs[gpu].nodes);
 
             // Allocate preds if necessary
-            if (_MARK_PREDECESSORS && !data_slices[gpu]->d_preds) {
-                VertexId    *d_preds;
-                if (retval = util::GRError(cudaMalloc(
-                                (void**)&d_preds,
-                                this->sub_graphs[gpu].nodes * sizeof(VertexId)),
-                            "BFSProblem cudaMalloc d_preds failed", __FILE__, __LINE__)) return retval;
-                data_slices[gpu]->d_preds = d_preds;
-            }
-            
             if (_MARK_PREDECESSORS)
-                util::MemsetKernel<<<128, 128>>>(data_slices[gpu]->d_preds, -2, this->sub_graphs[gpu].nodes);
+            {
+                if (data_slices[gpu].GetPointer(util::HOST)->preds.GetPointer(util::DEVICE)==NULL)
+                    if (retval = data_slices[gpu]->preds.Allocate(this->sub_graphs[gpu].nodes, util::DEVICE)) return retval;
+                util::MemsetKernel<<<128,128>>>(data_slices[gpu]->preds.GetPointer(util::DEVICE), -2, this->sub_graphs[gpu].nodes);
+            }
+            //if (_MARK_PREDECESSORS && !data_slices[gpu]->d_preds) {
+                //VertexId    *d_preds;
+                //if (retval = util::GRError(cudaMalloc(
+                //                (void**)&d_preds,
+                //                this->sub_graphs[gpu].nodes * sizeof(VertexId)),
+                //            "BFSProblem cudaMalloc d_preds failed", __FILE__, __LINE__)) return retval;
+                //data_slices[gpu]->d_preds = d_preds;
+            //}
+            
+            //if (_MARK_PREDECESSORS)
+            //    util::MemsetKernel<<<128, 128>>>(data_slices[gpu]->d_preds, -2, this->sub_graphs[gpu].nodes);
 
-                
-            if (retval = util::GRError(cudaMemcpy(
-                            d_data_slices[gpu],
-                            data_slices[gpu],
-                            sizeof(DataSlice),
-                            cudaMemcpyHostToDevice),
-                        "BFSProblem cudaMemcpy data_slices to d_data_slices failed", __FILE__, __LINE__)) return retval;
+            if (retval = data_slices[gpu].Move(util::HOST, util::DEVICE)) return retval;  
+            //if (retval = util::GRError(cudaMemcpy(
+            //                d_data_slices[gpu],
+            //                data_slices[gpu],
+            //                sizeof(DataSlice),
+            //                cudaMemcpyHostToDevice),
+            //            "BFSProblem cudaMemcpy data_slices to d_data_slices failed", __FILE__, __LINE__)) return retval;
 
         }
 
-        
         // Fillin the initial input_queue for BFS problem
         int gpu;
         VertexId tsrc;
@@ -591,7 +599,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                     "BFSProblem cudaMemcpy frontier_queues failed", __FILE__, __LINE__)) return retval;
         VertexId src_label = 0; 
         if (retval = util::GRError(cudaMemcpy(
-                        data_slices[gpu]->d_labels+tsrc,
+                        data_slices[gpu]->labels.GetPointer(util::DEVICE)+tsrc,//data_slices[gpu]->d_labels+tsrc,
                         &src_label,
                         sizeof(VertexId),
                         cudaMemcpyHostToDevice),
@@ -599,7 +607,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
         if (_MARK_PREDECESSORS) {
             VertexId src_pred = -1; 
             if (retval = util::GRError(cudaMemcpy(
-                            data_slices[gpu]->d_preds+tsrc,
+                            data_slices[gpu]->preds.GetPointer(util::DEVICE)+tsrc,//data_slices[gpu]->d_preds+tsrc,
                             &src_pred,
                             sizeof(VertexId),
                             cudaMemcpyHostToDevice),
@@ -607,11 +615,10 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
         }
 
         return retval;
-    }
-
+    } // reset
     /** @} */
 
-};
+}; //bfs_problem
 
 } //namespace bfs
 } //namespace app

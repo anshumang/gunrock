@@ -146,6 +146,13 @@ extern "C" {
         return barrier;
     }
 
+    void ReleaseBarrier(CPUBarrier *barrier)
+    {
+        pthread_mutex_lock(&barrier->mutex);
+        pthread_cond_signal(&barrier->conditionVariable);
+        pthread_mutex_unlock(&barrier->mutex);
+    }
+
     void IncrementnWaitBarrier(CPUBarrier *barrier, int thread_num)
     {
         bool ExcEvent=false;
@@ -282,6 +289,7 @@ extern "C" {
     template <typename _SizeT, typename _Value>
     void PrintGPUArray(const char* const name, const _Value* const array, const _SizeT limit, const int gpu=-1, const int iteration=-1)
     {
+        if (limit==0) return;
         _Value* h_array = new _Value[limit];
         util::GRError(cudaMemcpy(h_array,array,sizeof(_Value) * limit, cudaMemcpyDeviceToHost), "cuaMemcpy failed", __FILE__, __LINE__);
         PrintCPUArray<_SizeT,_Value>(name,h_array,limit,gpu,iteration);

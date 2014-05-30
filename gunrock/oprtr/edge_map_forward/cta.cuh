@@ -727,6 +727,7 @@ namespace edge_map_forward {
                             Functor::ApplyEdge(predecessor_id, neighbor_id, problem, smem_storage.gather_offsets[scratch_offset]);
                         else
                             neighbor_id = -1;
+                        //neighbor_id += *10;
                         // Scatter into out_queue
                         util::io::ModifiedStore<ProblemData::QUEUE_WRITE_MODIFIER>::St(
                                 neighbor_id,
