@@ -15,14 +15,9 @@
 #pragma once
 
 #include <gunrock/util/basic_utils.cuh>
-//#include <gunrock/util/cuda_properties.cuh>
-//#include <gunrock/util/memset_kernel.cuh>
-//#include <gunrock/util/cta_work_progress.cuh>
 #include <gunrock/util/error_utils.cuh>
-//#include <gunrock/util/multiple_buffering.cuh>
-//#include <gunrock/util/io/modified_load.cuh>
-//#include <gunrock/util/io/modified_store.cuh>
 #include <gunrock/util/multithread_utils.cuh>
+#include <gunrock/util/multithreading.cuh>
 
 #include <vector>
 
@@ -73,7 +68,7 @@ public:
         const GraphT     *graph;
         GraphT     *sub_graph;
         int        thread_num,num_gpus;
-        CUTBarrier *cpu_barrier;
+        util::cpu_mt::CPUBarrier* cpu_barrier;
         CUTThread  thread_Id;
         int        *partition_table0,**partition_table1;
         VertexId   *convertion_table0,**convertion_table1;
@@ -142,7 +137,7 @@ public:
         const GraphT* graph           = thread_data->graph;
         GraphT*     sub_graph         = thread_data->sub_graph;
         int         gpu               = thread_data->thread_num;
-        CUTBarrier* cpu_barrier       = thread_data->cpu_barrier;
+        util::cpu_mt::CPUBarrier* cpu_barrier = thread_data->cpu_barrier;
         int         num_gpus          = thread_data->num_gpus;
         int*        partition_table0  = thread_data->partition_table0;
         VertexId*   convertion_table0 = thread_data->convertion_table0;
@@ -156,6 +151,7 @@ public:
         SizeT*      cross_counter     = new SizeT[num_gpus];
         VertexId*   tconvertion_table = new VertexId[graph->nodes];
 
+        //printf("%d.0\t",gpu);fflush(stdout);
         memset(marker, 0, sizeof(int)*graph->nodes);
         memset(cross_counter, 0, sizeof(SizeT) * num_gpus);
 
@@ -192,9 +188,14 @@ public:
             node_counter+=cross_counter[peer];
         }
         out_offsets[gpu][num_gpus]=node_counter;
+        //printf("%d.1\t",gpu);fflush(stdout);
+
+        //cutIncrementBarrier(cpu_barrier);
+        //printf("%d.2\t",gpu);fflush(stdout);
+        util::cpu_mt::IncrementnWaitBarrier(cpu_barrier,gpu);
+        //cutWaitForBarrier  (cpu_barrier);
+        //printf("%d.3\t",gpu);fflush(stdout);
         
-        cutIncrementBarrier(cpu_barrier);
-        cutWaitForBarrier  (cpu_barrier);
         in_offsets[gpu][0]=0;
         node_counter=0;
         for (int peer=0;peer<num_gpus;peer++)
@@ -251,6 +252,7 @@ public:
 
         delete[] cross_counter;     cross_counter     = NULL;
         delete[] tconvertion_table; tconvertion_table = NULL;
+        //printf("%d.4\t",gpu);fflush(stdout);
         CUT_THREADEND;
     }
 
@@ -259,7 +261,9 @@ public:
         cudaError_t retval = cudaSuccess;
         ThreadSlice<VertexId,SizeT,Value>* thread_data = new ThreadSlice<VertexId,SizeT,Value>[num_gpus];
         CUTThread*   thread_Ids  = new CUTThread  [num_gpus];
-        CUTBarrier   cpu_barrier = cutCreateBarrier(num_gpus);
+        util::cpu_mt::CPUBarrier   cpu_barrier; //= cutCreateBarrier(num_gpus);
+        cpu_barrier = util::cpu_mt::CreateBarrier(num_gpus);
+
         for (int gpu=0;gpu<num_gpus;gpu++)
         {
             thread_data[gpu].graph             = graph;
@@ -278,7 +282,10 @@ public:
         }
 
         cutWaitForThreads(thread_Ids,num_gpus);
-        cutDestroyBarrier(&cpu_barrier);
+        //printf(".5\t");fflush(stdout);
+        //cutDestroyBarrier(&cpu_barrier);
+        util::cpu_mt::DestoryBarrier(&cpu_barrier);
+        //printf(".6\t");fflush(stdout);
         delete[] thread_Ids ;thread_Ids =NULL;
         delete[] thread_data;thread_data=NULL;
         Status = 2;

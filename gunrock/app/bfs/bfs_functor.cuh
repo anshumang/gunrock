@@ -90,6 +90,7 @@ struct BFSFunctor
      */
     static __device__ __forceinline__ bool CondVertex(VertexId node, DataSlice *problem, Value v = 0)
     {
+        //printf("%d,%d\t",problem->gpu_idx,node);
         return node != -1;
     }
 

@@ -24,6 +24,7 @@
 #include <gunrock/util/io/modified_store.cuh>
 #include <gunrock/util/array_utils.cuh>
 #include <gunrock/app/rp/rp_partitioner.cuh>
+#include <gunrock/app/metisp/metis_partitioner.cuh>
 #include <vector>
 #include <string>
 
@@ -532,14 +533,17 @@ public:
             {
                 if (partition_method=="random") 
                     partitioner=new rp::RandomPartitioner<VertexId, SizeT, Value>(graph,num_gpus);
+                else if (partition_method=="metis")
+                    partitioner=new metisp::MetisPartitioner<VertexId, SizeT, Value>(graph,num_gpus);
                 else util::GRError("partition_method invalid", __FILE__,__LINE__);
-                
+                printf("partition begin.\n");fflush(stdout); 
                 retval = partitioner->Partition(
                     sub_graphs,
                     partition_tables,
                     convertion_tables,
                     in_offsets,
                     out_offsets);
+                printf("partition end.\n");fflush(stdout);
                 if (retval) break;
             } else {
                 sub_graphs=&graph;

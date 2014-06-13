@@ -145,6 +145,8 @@ struct CtaWorkDistribution
 
         // The tile-aligned limit for full-tile processing
         work_limits.guarded_offset = work_limits.out_of_bounds - work_limits.guarded_elements;
+
+        //if (blockIdx.x==0) printf("%d,%d,%d\t",num_elements,work_limits.elements,work_limits.offset);
     }
 
 

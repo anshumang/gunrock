@@ -131,7 +131,7 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
         //SizeT*      tPosit = new SizeT[nodes];
         sort_node<SizeT> *sort_list = new sort_node<SizeT>[nodes];
 
-        //printf("Partition begin. seed=%ld\n", t);fflush(stdout);
+        printf("Partition begin. seed=%ld\n", t);fflush(stdout);
         //util::cpu_mt::PrintCPUArray("weitage", weitage, this->num_gpus);
 
         srand(t);
@@ -156,7 +156,9 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
             sort_list[node].posit=node;
         }
         std::vector<sort_node<SizeT> > sort_vector(sort_list, sort_list+nodes);
+        //printf("1");fflush(stdout);
         std::sort(sort_vector.begin(),sort_vector.end());//,compare_sort_node<SizeT>);
+        //printf("2");fflush(stdout);
         /*for (SizeT i=0;i<nodes-1;i++)
         for (SizeT j=i+1;j<nodes;j++)
         if (sort_list[j]< sort_list[i]) {
@@ -177,9 +179,11 @@ struct RandomPartitioner : PartitionerBase<VertexId,SizeT,Value>
         //delete[] tValue;tValue=NULL;
         //delete[] tPosit;tPosit=NULL;
         delete[] sort_list;sort_list=NULL;
+        //printf("3");fflush(stdout);
         retval = this->MakeSubGraph
                  //<LOAD_EDGE_VALUES, LOAD_NODE_VALUES>
                  ();
+        //printf("4");fflush(stdout);
         sub_graphs        = this->sub_graphs;
         partition_tables  = this->partition_tables;
         convertion_tables = this->convertion_tables;

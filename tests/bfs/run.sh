@@ -6,10 +6,10 @@ OPTION3="--undirected" #undirected and do not mark-pred"
 OPTION4="--undirected --mark-pred" #undirected and mark-pred"
 
 #put OS and Device type here
-SUFFIX="linuxmint15.k40cx2_6.0"
+SUFFIX="linuxmint15.k40cx4_6.0_metis"
 EXCUTION="./bin/test_bfs_6.0_x86_64"
-DATADIR="../../dataset/large"
-OPTION="--src=randomize --device=0,1"
+DATADIR="/data/gunrock_dataset/large"
+OPTION="--src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0"
 
 mkdir -p eval/$SUFFIX
 

@@ -18,6 +18,7 @@
 #include <windows.h>
 #else
 #include <unistd.h>
+#include <pthread.h>
 #endif
 #include <gunrock/util/multithreading.cuh>
 
@@ -46,11 +47,13 @@ namespace cpu_mt {
 #else
     struct CPUBarrier
     {
-        int* marker;
+        /*int* marker;
         bool reseted;
         int waken, releaseCount, count;
         pthread_mutex_t mutex,mutex1;
-        pthread_cond_t conditionVariable;
+        pthread_cond_t conditionVariable;*/
+        pthread_barrier_t barrier;
+        bool released;
     };
 #endif
 
@@ -131,6 +134,36 @@ extern "C" {
 
     CPUBarrier CreateBarrier(int releaseCount)
     {
+        CPUBarrier CB;
+        pthread_barrier_init(&CB.barrier,NULL,releaseCount);
+        CB.released=false;
+        return CB;
+    }
+
+    void ReleaseBarrier(CPUBarrier *CB)
+    {
+        //bool pre_released=CB->released;
+        CB->released=true;
+        //printf("releasing");fflush(stdout);
+        pthread_barrier_wait(&(CB->barrier));
+        //printf("released");fflush(stdout);
+    }
+
+    void IncrementnWaitBarrier(CPUBarrier *CB, int thread_num)
+    {
+        //printf("%d: waiting\n",thread_num);fflush(stdout);
+        //if (!CB->released) 
+        pthread_barrier_wait(&(CB->barrier));
+        //printf("%d: past\n", thread_num);fflush(stdout);
+    }
+
+    void DestoryBarrier(CPUBarrier *CB)
+    {
+        pthread_barrier_destroy(&(CB->barrier));
+        //printf("barrier destoried\n");fflush(stdout);
+    }
+    /*CPUBarrier CreateBarrier(int releaseCount)
+    {
         CPUBarrier barrier;
         
         barrier.count = 0;
@@ -149,7 +182,8 @@ extern "C" {
     void ReleaseBarrier(CPUBarrier *barrier)
     {
         pthread_mutex_lock(&barrier->mutex);
-        pthread_cond_signal(&barrier->conditionVariable);
+        //pthread_cond_signal(&barrier->conditionVariable);
+        pthread_cond_broadcast(&barrier->conditionVariable);
         pthread_mutex_unlock(&barrier->mutex);
     }
 
@@ -161,7 +195,7 @@ extern "C" {
         {
             barrier->count++;
             barrier->marker[thread_num] = 1;
-            //printf("%d: counted\n", thread_num);fflush(stdout);
+            printf("%d: counted %d of %d\n", thread_num, barrier->count,barrier->releaseCount);fflush(stdout);
         }
         if (barrier->count == barrier->releaseCount)
         {
@@ -172,48 +206,50 @@ extern "C" {
             barrier->waken   = 0;
         }
         pthread_mutex_unlock(&barrier->mutex1);
+        printf("%d: middle \n",thread_num);fflush(stdout);
 
         if (ExcEvent) {
-            //printf("%d: full\n", thread_num);fflush(stdout);
+            printf("%d: full\n", thread_num);fflush(stdout);
             pthread_mutex_lock(&barrier->mutex);
-            pthread_cond_signal(&barrier->conditionVariable);
+            //pthread_cond_signal(&barrier->conditionVariable);
+            pthread_cond_broadcast(&barrier->conditionVariable);
             pthread_mutex_unlock(&barrier->mutex);
-            /*printf("%d: waiting\n", thread_num);fflush(stdout);
-            while (true)
-            {
-                bool all_done=false;
-                pthread_mutex_lock(&barrier->mutex1);
-                if (barrier->waken == barrier->releaseCount -1)
-                {
-                    all_done=true;
-                    barrier->reseted = true;
-                }
-                pthread_mutex_unlock(&barrier->mutex1);
-                if (all_done) break;
-                usleep(10);
-            }*/
-            //printf("%d: past\n", thread_num); fflush(stdout);
+            //printf("%d: waiting\n", thread_num);fflush(stdout);
+            //while (true)
+            //{
+            //    bool all_done=false;
+            //    pthread_mutex_lock(&barrier->mutex1);
+            //    if (barrier->waken == barrier->releaseCount -1)
+            //    {
+            //        all_done=true;
+            //        barrier->reseted = true;
+            //    }
+            //    pthread_mutex_unlock(&barrier->mutex1);
+            //    if (all_done) break;
+            //    usleep(10);
+            //}
+            printf("%d: past\n", thread_num); fflush(stdout);
         } else {
-            //printf("%d: waiting1\n", thread_num);fflush(stdout);
+            printf("%d: waiting1\n", thread_num);fflush(stdout);
             pthread_mutex_lock(&barrier->mutex);
             //while (barrier->count !=0)
                 pthread_cond_wait(&barrier->conditionVariable, &barrier->mutex);
             pthread_mutex_unlock(&barrier->mutex);
             //printf("%d: waken\n", thread_num);fflush(stdout);
-            /*pthread_mutex_lock(&barrier->mutex1);
-            barrier->waken++;
-            pthread_mutex_unlock(&barrier->mutex1);
-            printf("%d: waiting2\n", thread_num);fflush(stdout);
-            while (true)
-            {
-                bool all_done=false; 
-                pthread_mutex_lock(&barrier->mutex1);
-                if (barrier->reseted) all_done=true;
-                pthread_mutex_unlock(&barrier->mutex1); 
-                if (all_done) break;           
-                usleep(10);
-            }*/
-            //printf("%d: past\n", thread_num);fflush(stdout);
+            //pthread_mutex_lock(&barrier->mutex1);
+            //barrier->waken++;
+            //pthread_mutex_unlock(&barrier->mutex1);
+            //printf("%d: waiting2\n", thread_num);fflush(stdout);
+            //while (true)
+            //{
+            //    bool all_done=false; 
+            //    pthread_mutex_lock(&barrier->mutex1);
+            //    if (barrier->reseted) all_done=true;
+            //    pthread_mutex_unlock(&barrier->mutex1); 
+            //    if (all_done) break;           
+            //    usleep(10);
+            //}
+            printf("%d: past\n", thread_num);fflush(stdout);
         }
     }
 
@@ -223,7 +259,7 @@ extern "C" {
         pthread_mutex_destroy(&barrier->mutex1);
         pthread_cond_destroy(&barrier->conditionVariable);
         delete[] barrier->marker; barrier->marker=NULL;
-    }
+    }*/
 #endif //_WIN32
 
     void PrintMessage (const char* const message, const int gpu=-1, const int iteration=-1)

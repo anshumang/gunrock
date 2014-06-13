@@ -47,6 +47,7 @@ struct SweepPass
         typedef Cta<KernelPolicy, ProblemData, Functor>     Cta;
         typedef typename KernelPolicy::SizeT                SizeT;
 
+
         // Determine our threadblock's work range
         util::CtaWorkLimits<SizeT> work_limits;
         work_decomposition.template GetCtaWorkLimits<
@@ -72,6 +73,7 @@ struct SweepPass
             work_progress,
             max_out_frontier);
 
+        //printf("%d invoke\t",problem->gpu_idx);
         // Process full tiles
         while (work_limits.offset < work_limits.guarded_offset) {
 

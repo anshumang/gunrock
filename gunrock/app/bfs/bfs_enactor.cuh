@@ -76,8 +76,8 @@ namespace bfs {
     {  
         SizeT x = ((blockIdx.y*gridDim.x+blockIdx.x)*blockDim.y+threadIdx.y)*blockDim.x+threadIdx.x;
         if (x>=num_elements) return;
-        VertexId key=keys_in[x];
         SizeT x2=incoming_offset+x;
+        VertexId key=keys_in[x2];
         /*__shared__ VertexId* a_out_0;
         a_out_0=associate_out[0];
 
@@ -197,6 +197,7 @@ namespace bfs {
         util::KernelRuntimeStatsLifetime*
                      vertex_map_kernel_stats = &(enactor->vertex_map_kernel_stats[thread_num]);
         util::scan::MultiScan<VertexId,SizeT,true,256,8> *Scaner = NULL;
+        bool break_clean=true;
 
         if (num_gpus >1) 
         {
@@ -220,7 +221,8 @@ namespace bfs {
                     else if (retval[0] = work_progress->GetQueueLength(queue_index, _queue_length)) break;
                     //printf("%d\t%d\tQueue_Length = %d\n",thread_num,iteration[0],_queue_length);fflush(stdout);
                     //if (retval[0] = work_progress->GetQueueLength(queue_index+1, _queue_length)) break;
-                    //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("keys",graph_slice->frontier_queues.d_keys[selector],_queue_length,thread_num,iteration[0]);
+                    //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("keys0",graph_slice->frontier_queues.d_keys[selector],_queue_length,thread_num,iteration[0]);
+                    //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("labe0",data_slice[0]->labels.GetPointer(util::GPU),graph_slice->nodes,thread_num,iteration[0]);
                 }
 
                 // Edge Map
@@ -257,6 +259,8 @@ namespace bfs {
                     SizeT _queue_length;
                     if (retval[0] = work_progress->GetQueueLength(queue_index, _queue_length)) break;
                     //printf("%d\t%d\tQueue_Length = %d\n",thread_num,iteration[0],_queue_length);fflush(stdout);
+                    //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("keys1",graph_slice->frontier_queues.d_keys[selector],_queue_length,thread_num,iteration[0]);
+                    //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("labe1",data_slice[0]->labels.GetPointer(util::GPU),graph_slice->nodes,thread_num,iteration[0]);
                 }
 
                 if (INSTRUMENT) {
@@ -313,6 +317,8 @@ namespace bfs {
                     total_queued[0] += _queue_length;
                     if (DEBUG) 
                     {
+                        //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("keys2",graph_slice->frontier_queues.d_keys[selector],_queue_length,thread_num,iteration[0]);
+                        //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("labe2",data_slice[0]->labels.GetPointer(util::GPU),graph_slice->nodes,thread_num,iteration[0]);
                     }
                     if (INSTRUMENT) {
                         if (retval[0] = vertex_map_kernel_stats->Accumulate(
@@ -366,12 +372,13 @@ namespace bfs {
                        
                         if (iteration[0]!=0)
                         {  //CPU global barrier
-                            if (All_Done(dones,retvals,num_gpus)) break;
                             util::cpu_mt::IncrementnWaitBarrier(&(cpu_barrier[1]),thread_num);
+                            if (All_Done(dones,retvals,num_gpus)) {break_clean=false;break;}
                         }
 
                         //util::cpu_mt::PrintCPUArray<SizeT,SizeT>("out_length",data_slice[0]->out_length.GetPointer(util::HOST),num_gpus,thread_num,iteration[0]);
-                        //util::cpu_mt::PrintGPUArray<SizeT,SizeT>("keys",graph_slice->frontier_queues.d_keys[selector],out_offset[num_gpus],thread_num,iteration[0]);
+                        //util::cpu_mt::PrintCPUArray<SizeT,SizeT>("out_offset",out_offset,num_gpus+1,thread_num,iteration[0]);
+                        //util::cpu_mt::PrintGPUArray<SizeT,SizeT>("keys3",graph_slice->frontier_queues.d_keys[selector],out_offset[num_gpus],thread_num,iteration[0]);
                         //Move data
                         //printf("%d\t%d\tMove begin.\n",thread_num,iteration[0]);fflush(stdout);
                         for (int peer=0;peer<num_gpus;peer++)
@@ -404,8 +411,8 @@ namespace bfs {
                     }  else {
                         if (iteration[0]!=0)
                         {  //CPU global barrier
-                            if (All_Done(dones,retvals,num_gpus)) break;
                             util::cpu_mt::IncrementnWaitBarrier(&(cpu_barrier[1]),thread_num);
+                            if (All_Done(dones,retvals,num_gpus)) {break_clean=false;break;}
                         }
 
                         for (int peer=0;peer<num_gpus;peer++)
@@ -418,8 +425,8 @@ namespace bfs {
                     }
 
                     //CPU global barrier
-                    if (All_Done(dones,retvals,num_gpus)) break;
-                    util::cpu_mt::IncrementnWaitBarrier(&(cpu_barrier[0]),thread_num);
+                    util::cpu_mt::IncrementnWaitBarrier(&(cpu_barrier[1]),thread_num);
+                    if (All_Done(dones,retvals,num_gpus)) {break_clean=false;break;}
                     SizeT total_length=data_slice[0]->out_length[0];
                     //printf("%d\t%d\tExpand begin.\n",thread_num,iteration[0]);fflush(stdout);
                     for (int peer=0;peer<num_gpus;peer++)
@@ -429,8 +436,8 @@ namespace bfs {
                         if (data_slice[0]->in_length[peer_] ==0) continue;
                         int grid_size = data_slice[0]->in_length[peer_] / 256;
                         if ((data_slice[0]->in_length[peer_] % 256)!=0) grid_size++;
-                        //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("keys_in",data_slice[0]->keys_in.GetPointer(util::DEVICE),data_slice[0]->in_length[peer_],thread_num,iteration[0]);
-                        //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("asso_in",data_slice[0]->associate_ins[0],data_slice[0]->in_length[peer_],thread_num,iteration[0]);
+                        //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("keys_in",data_slice[0]->keys_in.GetPointer(util::DEVICE)+graph_slice->in_offset[peer_],data_slice[0]->in_length[peer_],thread_num,iteration[0]);
+                        //util::cpu_mt::PrintGPUArray<SizeT,VertexId>("asso_in",data_slice[0]->associate_ins[0]+graph_slice->in_offset[peer_],data_slice[0]->in_length[peer_],thread_num,iteration[0]);
                         Expand_Incoming <VertexId, SizeT, BFSProblem::MARK_PREDECESSORS>
                             <<<grid_size,256>>> (
                             data_slice[0]  ->in_length[peer_],
@@ -457,9 +464,11 @@ namespace bfs {
                         dones[thread_num][0]=0;
                     }
                 }
+                //printf("%d\t%d\tIteration end.\n", thread_num, iteration[0]);fflush(stdout);
                 iteration[0]++;
             }
 
+            //printf("%d\t%d\tLoop quited.\n", thread_num, iteration[0]);fflush(stdout);
             //delete[] h_cur_queue;h_cur_queue=NULL;
 
             // Check if any of the frontiers overflowed due to redundant expansion
@@ -473,8 +482,9 @@ namespace bfs {
 
         if (num_gpus >1)
         {
-            util::cpu_mt::ReleaseBarrier(&(cpu_barrier[0]));
-            util::cpu_mt::ReleaseBarrier(&(cpu_barrier[1]));
+            if (break_clean) util::cpu_mt::ReleaseBarrier(&(cpu_barrier[1]));
+            //util::cpu_mt::ReleaseBarrier(&(cpu_barrier[0]));
+            //util::cpu_mt::ReleaseBarrier(&(cpu_barrier[1]));
             delete Scaner; Scaner=NULL;
             delete[] out_offset; out_offset=NULL;
         }

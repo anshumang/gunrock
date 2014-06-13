@@ -215,7 +215,7 @@ struct Cta
             {
                 if (ProblemData::ENABLE_IDEMPOTENCE && cta->iteration != -1) {
                     if (tile->vertex_id[LOAD][VEC] >= 0) {
-                        VertexId row_id = (tile->vertex_id[LOAD][VEC]&KernelPolicy::VERTEX_ID_MASK)/cta->num_gpus;
+                        VertexId row_id = (tile->vertex_id[LOAD][VEC]&KernelPolicy::VERTEX_ID_MASK);// /cta->num_gpus;
 
                         VertexId label;
                         util::io::ModifiedLoad<ProblemData::COLUMN_READ_MODIFIER>::Ld(
@@ -236,9 +236,11 @@ struct Cta
                         }
                     }
                 } else {
+                    //if (cta->problem->gpu_idx == 0) 
+                        //printf("%d|%d\t",cta->problem->gpu_idx,tile->vertex_id[LOAD][VEC]);
                     if (tile->vertex_id[LOAD][VEC] >= 0) {
                         // Row index on our GPU (for multi-gpu, vertex ids are striped across GPUs)
-                        VertexId row_id = (tile->vertex_id[LOAD][VEC]) / cta->num_gpus;
+                        VertexId row_id = (tile->vertex_id[LOAD][VEC]);// / cta->num_gpus;
 
                         if (Functor::CondVertex(row_id, cta->problem)) {
                             // ApplyVertex(row_id)

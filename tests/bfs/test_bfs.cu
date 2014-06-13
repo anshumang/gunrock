@@ -17,6 +17,7 @@
 #include <deque>
 #include <vector>
 #include <iostream>
+//#include <cstdint>
 
 // Utilities and correctness-checking
 #include <gunrock/util/test_utils.cuh>
@@ -320,21 +321,21 @@ void RunTests(
             h_preds = (VertexId*)malloc(sizeof(VertexId) * graph.nodes);
         }
 
-        //printf("RunTests begin.\n"); fflush(stdout);
+        printf("RunTests begin.\n"); fflush(stdout);
         // Allocate BFS enactor map
         BFSEnactor<Problem, INSTRUMENT>* bfs_enactor=new BFSEnactor<Problem, INSTRUMENT>(g_verbose);
-        //printf("bfs_enactor created.\n"); fflush(stdout);
+        printf("bfs_enactor created.\n"); fflush(stdout);
 
         // Allocate problem on GPU
         Problem *csr_problem = new Problem;
-        //printf("problem created.\n"); fflush(stdout);
+        printf("problem created.\n"); fflush(stdout);
 
         util::GRError(csr_problem->Init(
             g_stream_from_host,
             partition_method,
             graph,
             num_gpus,gpu_idx), "Problem BFS Initialization Failed", __FILE__, __LINE__);
-        //printf("problem inited.\n"); fflush(stdout);
+        printf("problem inited.\n"); fflush(stdout);
 
         //
         // Compute reference CPU BFS solution for source-distance
@@ -359,7 +360,7 @@ void RunTests(
         CpuTimer cpu_timer;
 
         util::GRError(csr_problem->Reset(src, bfs_enactor->GetFrontierType(), max_queue_sizing), "BFS Problem Data Reset Failed", __FILE__, __LINE__);
-        //printf("BFSProblem reseted.\n"); fflush(stdout);
+        printf("BFSProblem reseted.\n"); fflush(stdout);
         cpu_timer.Start();
         //util::GRError(bfs_enactor->template Enact<Problem>(csr_problem, src, max_grid_size), "BFS Problem Enact Failed", __FILE__, __LINE__);
         util::GRError(bfs_enactor->Enact(csr_problem, src, max_grid_size), "BFS Problem Enact failed", __FILE__, __LINE__);
@@ -602,10 +603,10 @@ int main( int argc, char** argv)
 
 		// Matrix-market coordinate-formatted graph file
 
-		typedef int VertexId;							// Use as the node identifier type
-		typedef int Value;								// Use as the value type
-		typedef int SizeT;								// Use as the graph size type
-		Csr<VertexId, Value, SizeT> csr(false);         // default value for stream_from_host is false
+		typedef int VertexId;               // Use as the node identifier type
+		typedef int Value;                  // Use as the value type
+		typedef int SizeT;                  // Use as the graph size type
+		Csr<VertexId, Value, SizeT> csr(false); // default value for stream_from_host is false
 
 		if (graph_args < 1) { Usage(); return 1; }
 		char *market_filename = (graph_args == 2) ? argv[2] : NULL;

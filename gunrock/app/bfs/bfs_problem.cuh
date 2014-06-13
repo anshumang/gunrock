@@ -446,6 +446,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             int             num_gpus,
             int*            gpu_idx)
     {
+        printf("ProblemBase Init start.\n");fflush(stdout);
         ProblemBase<VertexId, SizeT,Value,_USE_DOUBLE_BUFFER>::Init(
             stream_from_host,
             partition_method,
@@ -453,18 +454,24 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             num_gpus,
             gpu_idx);
         // No data in DataSlice needs to be copied from host
+        printf("ProblemBase Init end.\n");fflush(stdout);
 
+        //graph.DisplayGraph("Original");
         /**
          * Allocate output labels/preds
          */
         cudaError_t retval = cudaSuccess;
         data_slices = new util::Array1D<SizeT,DataSlice>[this->num_gpus];
+        //util::cpu_mt::PrintCPUArray<SizeT,int>("Partition",this->partition_tables[0],graph.nodes);
+        //util::cpu_mt::PrintCPUArray<SizeT,VertexId>("Convertion",this->convertion_tables[0],graph.nodes);
         //data_slices   = new DataSlice*[this->num_gpus];
         //d_data_slices = new DataSlice*[this->num_gpus];
 
         do {
             for (int gpu=0;gpu<this->num_gpus;gpu++)
             {
+                printf("GPU %d\n",gpu);fflush(stdout);
+                //this->sub_graphs[gpu].DisplayGraph("subgraph");
                 data_slices[gpu].SetName("data_slices[]");
                 if (retval = util::GRError(cudaSetDevice(this->gpu_idx[gpu]), "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) return retval;
                 if (retval = data_slices[gpu].Allocate(1,util::DEVICE | util::HOST)) return retval;
@@ -505,7 +512,8 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             } //end for(gpu)
             //} // end if (num_gpus)
         } while (0);
-        
+        printf("problemInit finish.\n");fflush(stdout);
+
         return retval;
     }
 
