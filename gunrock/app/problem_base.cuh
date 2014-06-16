@@ -97,7 +97,7 @@ struct ProblemBase
         //int             *d_partition_table;         // partition_table on device
         //SizeT           *d_in_offset;               // in_offset on device
         
-        util::DoubleBuffer<VertexId, VertexId>      frontier_queues;      // Frontier queues, used to track working frontier.
+        util::DoubleBuffer<SizeT, VertexId, VertexId> frontier_queues;      // Frontier queues, used to track working frontier.
         SizeT                                       frontier_elements[2]; // Size of Frontier_queues
 
         /**
@@ -133,8 +133,8 @@ struct ProblemBase
             for (int i = 0; i < 2; ++i)
             {
                 frontier_elements       [i] = 0;
-                frontier_queues.d_keys  [i] = NULL;
-                frontier_queues.d_values[i] = NULL;
+                //frontier_queues.d_keys  [i] = NULL;
+                //frontier_queues.d_values[i] = NULL;
             }
         }
 
@@ -165,10 +165,12 @@ struct ProblemBase
             //                            "GpuSlice cudaFree d_in_offset failed"       , __FILE__, __LINE__);
 
             for (int i = 0; i < 2; ++i) {
+                frontier_queues.keys[i].Release();
+                frontier_queues.values[i].Release();
                 //if (frontier_queues.d_keys  [i]) util::GRError(cudaFree(frontier_queues.d_keys  [i]), 
                 //                                     "GpuSlice cudaFree frontier_queues.d_keys failed"  , __FILE__, __LINE__);
-                if (frontier_queues.d_values[i]) util::GRError(cudaFree(frontier_queues.d_values[i]), 
-                                                     "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__);
+                //if (frontier_queues.d_values[i]) util::GRError(cudaFree(frontier_queues.d_values[i]), 
+                //                                     "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__);
             }
         } // end of ~GraphSlice()
 
@@ -358,30 +360,34 @@ struct ProblemBase
                 if (frontier_elements[i] < new_frontier_elements[i]) {
 
                     // Free if previously allocated
-                    if (frontier_queues.d_keys[i]) {
-                        if (retval = util::GRError(cudaFree(frontier_queues.d_keys[i]),
-                                         "GpuSlice cudaFree frontier_queues.d_keys failed", __FILE__, __LINE__)) return retval;
-                    }
+                    //if (frontier_queues.d_keys[i]) {
+                        //if (retval = util::GRError(cudaFree(frontier_queues.d_keys[i]),
+                        //                 "GpuSlice cudaFree frontier_queues.d_keys failed", __FILE__, __LINE__)) return retval;
+                    if (retval = frontier_queues.keys[i].Release()) return retval;
+                    //}
 
                     // Free if previously allocated
                     if (_USE_DOUBLE_BUFFER) {
-                        if (frontier_queues.d_values[i]) {
-                            if (retval = util::GRError(cudaFree(frontier_queues.d_values[i]),
-                                             "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__)) return retval;
-                        }
+                        //if (frontier_queues.d_values[i]) {
+                            if (retval = frontier_queues.values[i].Release()) return retval;
+                            //if (retval = util::GRError(cudaFree(frontier_queues.d_values[i]),
+                            //                 "GpuSlice cudaFree frontier_queues.d_values failed", __FILE__, __LINE__)) return retval;
+                        //}
                     }
 
                     frontier_elements[i] = new_frontier_elements[i];
 
-                    if (retval = util::GRError(cudaMalloc(
-                                     (void**) &(frontier_queues.d_keys[i]),
-                                     frontier_elements[i] * sizeof(VertexId)),
-                                     "GpuSlice cudaMalloc frontier_queues.d_keys failed", __FILE__, __LINE__)) return retval;
+                    if (retval = frontier_queues.keys[i].Allocate(frontier_elements[i],util::DEVICE)) return retval;
+                    //if (retval = util::GRError(cudaMalloc(
+                    //                 (void**) &(frontier_queues.d_keys[i]),
+                    //                 frontier_elements[i] * sizeof(VertexId)),
+                    //                 "GpuSlice cudaMalloc frontier_queues.d_keys failed", __FILE__, __LINE__)) return retval;
                     if (_USE_DOUBLE_BUFFER) {
-                        if (retval = util::GRError(cudaMalloc(
-                                     (void**) &(frontier_queues.d_values[i]),
-                                     frontier_elements[i] * sizeof(VertexId)),
-                                     "GpuSlice cudaMalloc frontier_queues.d_values failed", __FILE__, __LINE__)) return retval;
+                        if (retval = frontier_queues.values[i].Allocate(frontier_elements[i],util::DEVICE)) return retval;
+                        //if (retval = util::GRError(cudaMalloc(
+                        //             (void**) &(frontier_queues.d_values[i]),
+                        //             frontier_elements[i] * sizeof(VertexId)),
+                        //             "GpuSlice cudaMalloc frontier_queues.d_values failed", __FILE__, __LINE__)) return retval;
                     }
                 } //end if
             } // end for i<2

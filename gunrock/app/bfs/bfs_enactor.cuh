@@ -162,7 +162,7 @@ namespace bfs {
             BFSProblem> BfsFunctor;
         
         SizeT*       out_offset;
-        char*         message              = new char [1024];
+        char*        message              = new char [1024];
         BFSProblem*  problem               =   (BFSProblem*) thread_data->problem;
         BFSEnactor<BFSProblem, INSTRUMENT>*  
                      enactor               =   (BFSEnactor<BFSProblem, INSTRUMENT>*)thread_data->enactor;
@@ -193,9 +193,9 @@ namespace bfs {
         util::CtaWorkProgressLifetime*
                      work_progress         = &(enactor    ->work_progress  [thread_num]);
         util::KernelRuntimeStatsLifetime*
-                       edge_map_kernel_stats = &(enactor->  edge_map_kernel_stats[thread_num]);
+                     edge_map_kernel_stats = &(enactor    ->  edge_map_kernel_stats[thread_num]);
         util::KernelRuntimeStatsLifetime*
-                     vertex_map_kernel_stats = &(enactor->vertex_map_kernel_stats[thread_num]);
+                   vertex_map_kernel_stats = &(enactor    ->vertex_map_kernel_stats[thread_num]);
         util::scan::MultiScan<VertexId,SizeT,true,256,8> *Scaner = NULL;
         bool break_clean=true;
 
@@ -235,12 +235,11 @@ namespace bfs {
                     iteration[0],
                     num_elements,
                     d_done,
-                    graph_slice->frontier_queues.d_keys[selector],              // d_in_queue
-                    graph_slice->frontier_queues.d_values[selector^1],          // d_pred_out_queue
-                    graph_slice->frontier_queues.d_keys[selector^1],            // d_out_queue
-                    //graph_slice->d_column_indices,
-                    graph_slice->column_indices.GetPointer(util::DEVICE),
-                    data_slice->GetPointer(util::DEVICE),//d_data_slice,
+                    graph_slice->frontier_queues.keys  [selector  ].GetPointer(util::DEVICE),    // d_in_queue
+                    graph_slice->frontier_queues.values[selector^1].GetPointer(util::DEVICE),    // d_pred_out_queue
+                    graph_slice->frontier_queues.keys  [selector^1].GetPointer(util::DEVICE),    // d_out_queue
+                    graph_slice->column_indices                    .GetPointer(util::DEVICE),    // d_column_indices
+                    data_slice ->                                   GetPointer(util::DEVICE),    // d_data_slice
                     work_progress[0],
                     graph_slice->frontier_elements[selector],                   // max_in_queue
                     graph_slice->frontier_elements[selector^1],                 // max_out_queue
@@ -292,13 +291,11 @@ namespace bfs {
                     1,
                     num_elements,
                     d_done,
-                    graph_slice->frontier_queues.d_keys[selector],      // d_in_queue
-                    graph_slice->frontier_queues.d_values[selector],    // d_pred_in_queue
-                    graph_slice->frontier_queues.d_keys[selector^1],    // d_out_queue
-                    //d_data_slice,
-                    data_slice->GetPointer(util::DEVICE),
-                    //data_slice->d_visited_mask,
-                    data_slice[0]->visited_mask.GetPointer(util::DEVICE),
+                    graph_slice->frontier_queues.keys  [selector  ].GetPointer(util::DEVICE),    // d_in_queue
+                    graph_slice->frontier_queues.values[selector  ].GetPointer(util::DEVICE),    // d_pred_in_queue
+                    graph_slice->frontier_queues.keys  [selector^1].GetPointer(util::DEVICE),    // d_out_queue
+                    data_slice ->                                   GetPointer(util::DEVICE),    // d_data_slice
+                    data_slice[0]->visited_mask                    .GetPointer(util::DEVICE),    // d_visited_mask
                     work_progress[0],
                     graph_slice->frontier_elements[selector],           // max_in_queue
                     graph_slice->frontier_elements[selector^1],         // max_out_queue
@@ -345,8 +342,8 @@ namespace bfs {
                         Scaner->Scan_with_Keys(n,
                                   num_gpus,
                                   data_slice[0]->num_associate,
-                                  graph_slice  ->frontier_queues  .d_keys[selector],
-                                  graph_slice  ->frontier_queues  .d_keys[selector^1],
+                                  graph_slice  ->frontier_queues  .keys[selector  ].GetPointer(util::DEVICE),
+                                  graph_slice  ->frontier_queues  .keys[selector^1].GetPointer(util::DEVICE),
                                   //graph_slice->d_partition_table,
                                   graph_slice  ->partition_table  .GetPointer(util::DEVICE),
                                   //graph_slice->d_convertion_table,
@@ -383,25 +380,27 @@ namespace bfs {
                         //printf("%d\t%d\tMove begin.\n",thread_num,iteration[0]);fflush(stdout);
                         for (int peer=0;peer<num_gpus;peer++)
                         {
+                            if (peer == thread_num) continue;
                             int peer_ = peer<thread_num? peer+1     : peer;
                             int gpu_  = peer<thread_num? thread_num : thread_num+1;
-                            if (peer==thread_num) continue;
                             problem->data_slices[peer]->in_length[gpu_]=data_slice[0]->out_length[peer_];
                             if (data_slice[0]->out_length[peer_] == 0) continue;
                             dones[peer][0]=-1;
                             if (retval [0] = util::GRError(cudaMemcpy(
-                                  problem->data_slices[peer]->keys_in.GetPointer(util::DEVICE) + problem->graph_slices[peer]->in_offset[gpu_],
-                                  graph_slice->frontier_queues.d_keys[selector] + out_offset[peer_],
+                                  problem -> data_slices[peer] -> keys_in.GetPointer(util::DEVICE) 
+                                      + problem -> graph_slices[peer] -> in_offset[gpu_],
+                                  graph_slice -> frontier_queues.keys[selector].GetPointer(util::DEVICE)
+                                      + out_offset[peer_],
                                   sizeof(VertexId) * data_slice[0]->out_length[peer_], cudaMemcpyDefault),
                                   "cudaMemcpyPeer d_keys failed", __FILE__, __LINE__)) break;
 
                             for (int i=0;i<data_slice[0]->num_associate;i++)
                             {
                                 if (retval [0] = util::GRError(cudaMemcpy(
-                                    //problem->data_slices[peer]->h_associate_in[i] + problem->graph_slices[peer]->in_offset[gpu_],
-                                    problem->data_slices[peer]->associate_ins[i] + problem->graph_slices[peer]->in_offset[gpu_],
-                                    //data_slice->h_associate_out[i] + (out_offset[peer_] - out_offset[1]),
-                                    data_slice[0]->associate_outs[i] + (out_offset[peer_] - out_offset[1]), 
+                                    problem->data_slices[peer]->associate_ins[i] 
+                                        + problem->graph_slices[peer]->in_offset[gpu_],
+                                    data_slice[0]->associate_outs[i] 
+                                        + (out_offset[peer_] - out_offset[1]), 
                                     sizeof(VertexId) * data_slice[0]->out_length[peer_], cudaMemcpyDefault),
                                     "cudaMemcpyPeer associate_out failed", __FILE__, __LINE__)) break;
                             }
@@ -445,7 +444,7 @@ namespace bfs {
                             graph_slice    ->in_offset[peer_],
                             //data_slice  ->d_keys_in,
                             data_slice[0]  ->keys_in.GetPointer(util::DEVICE),
-                            graph_slice    ->frontier_queues.d_keys[selector]+total_length,
+                            graph_slice    ->frontier_queues.keys[selector].GetPointer(util::DEVICE) + total_length,
                             //data_slice  ->d_associate_in,
                             data_slice[0]  ->associate_ins.GetPointer(util::DEVICE),
                             //data_slice  ->d_associate_org);

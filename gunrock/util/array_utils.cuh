@@ -119,7 +119,7 @@ public:
 
     void SetName(std::string name)
     {
-        this->name="\t"+name;
+        this->name=name;
     }
 
     cudaError_t Allocate(SizeT size, unsigned int target = HOST)

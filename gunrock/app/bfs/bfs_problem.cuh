@@ -599,12 +599,18 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
         }
         if (retval = util::GRError(cudaSetDevice(this->gpu_idx[gpu]), "BFSProblem cudaSetDevice failed", __FILE__, __LINE__)) return retval;
 
-        if (retval = util::GRError(cudaMemcpy(
+        /*if (retval = util::GRError(cudaMemcpy(
                         BaseProblem::graph_slices[gpu]->frontier_queues.d_keys[0],
                         &tsrc,
                         sizeof(VertexId),
                         cudaMemcpyHostToDevice),
-                    "BFSProblem cudaMemcpy frontier_queues failed", __FILE__, __LINE__)) return retval;
+                    "BFSProblem cudaMemcpy frontier_queues failed", __FILE__, __LINE__)) return retval;*/
+        if (retval = util::GRError(cudaMemcpy(
+                        BaseProblem::graph_slices[gpu]->frontier_queues.keys[0].GetPointer(util::DEVICE),
+                        &tsrc,
+                        sizeof(VertexId),
+                        cudaMemcpyHostToDevice),
+                     "BFSProblem cudaMemcpy frontier_queues failed", __FILE__, __LINE__)) return retval;
         VertexId src_label = 0; 
         if (retval = util::GRError(cudaMemcpy(
                         data_slices[gpu]->labels.GetPointer(util::DEVICE)+tsrc,//data_slices[gpu]->d_labels+tsrc,
@@ -612,6 +618,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                         sizeof(VertexId),
                         cudaMemcpyHostToDevice),
                     "BFSProblem cudaMemcpy frontier_queues failed", __FILE__, __LINE__)) return retval;
+        
         if (_MARK_PREDECESSORS) {
             VertexId src_pred = -1; 
             if (retval = util::GRError(cudaMemcpy(

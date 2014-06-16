@@ -17,6 +17,7 @@
 #pragma once
 
 #include <gunrock/util/basic_utils.cuh>
+#include <gunrock/util/array_utils.cuh>
 
 namespace gunrock {
 namespace util {
@@ -43,17 +44,22 @@ namespace util {
 template <
     int BUFFER_COUNT,
     typename _KeyType,
-    typename _ValueType = util::NullType>
+    typename _SizeType,
+    typename _ValueType = util::NullType,
+    unsigned int TARGET = util::DEVICE >
 struct MultipleBuffer
 {
     typedef _KeyType    KeyType;
     typedef _ValueType  ValueType;
+    typedef _SizeType   SizeType;
 
     // Set of device vector pointers for keys
-    KeyType* d_keys[BUFFER_COUNT];
+    //KeyType* d_keys[BUFFER_COUNT];
+    Array1D<SizeType,KeyType> keys[BUFFER_COUNT];
     
     // Set of device vector pointers for values
-    ValueType* d_values[BUFFER_COUNT];
+    //ValueType* d_values[BUFFER_COUNT];
+    Array1D<SizeType,ValueType> values[BUFFER_COUNT];
 
     // Selector into the set of device vector pointers (i.e., where the results are)
     int selector;
@@ -63,8 +69,10 @@ struct MultipleBuffer
     {
         selector = 0;
         for (int i = 0; i < BUFFER_COUNT; i++) {
-            d_keys[i] = NULL;
-            d_values[i] = NULL;
+            //d_keys[i] = NULL;
+            //d_values[i] = NULL;
+            keys[i].SetName("keys");
+            values[i].SetName("values");
         }
     }
 };
@@ -90,43 +98,56 @@ struct MultipleBuffer
  *
  */
 template <
+    typename SizeType,
     typename KeyType,
-    typename ValueType = util::NullType>
-struct DoubleBuffer : MultipleBuffer<2, KeyType, ValueType>
+    typename ValueType = util::NullType,
+    unsigned int TARGET = util::DEVICE>
+struct DoubleBuffer : MultipleBuffer<2, SizeType, KeyType, ValueType, TARGET>
 {
-    typedef MultipleBuffer<2, KeyType, ValueType> ParentType;
+    typedef MultipleBuffer<2, SizeType, KeyType, ValueType, TARGET> ParentType;
 
     // Constructor
     DoubleBuffer() : ParentType() {}
 
     // Constructor
     DoubleBuffer(
+        SizeType size,
         KeyType* keys) : ParentType()
 
     {
-        this->d_keys[0] = keys;
+        //this->d_keys[0] = keys;
+        this->keys  [0].SetPointer(keys  ,size,TARGET);
     }
 
     // Constructor
     DoubleBuffer(
+        SizeType size,
         KeyType* keys,
         ValueType* values) : ParentType()
     {
-        this->d_keys[0] = keys;
-        this->d_values[0] = values;
+        //this->d_keys[0] = keys;
+        this->keys  [0].SetPointer(keys  ,size,TARGET);
+        //this->d_values[0] = values;
+        this->values[0].SetPointer(values,size,TARGET);
     }
 
     // Constructor
     DoubleBuffer(
+        SizeType size0,
+        SizeType size1,
         KeyType* keys0,
         KeyType* keys1,
         ValueType* values0,
         ValueType* values1) : ParentType()
     {
-        this->d_keys[0] = keys0;
-        this->d_keys[1] = keys1;
-        this->d_values[0] = values0;
-        this->d_values[1] = values1;
+        //this->d_keys[0] = keys0;
+        //this->d_keys[1] = keys1;
+        //this->d_values[0] = values0;
+        //this->d_values[1] = values1;
+        this->keys  [0].SetPointer(keys0  ,size0,TARGET);
+        this->values[0].SetPointer(values0,size0,TARGET);
+        this->keys  [1].SetPointer(keys1  ,size1,TARGET);
+        this->values[1].SetPointer(values1,size1,TARGET);
     }
 };
 
@@ -135,11 +156,13 @@ struct DoubleBuffer : MultipleBuffer<2, KeyType, ValueType>
  * Triple buffer version of the multi-buffer storage abstraction above.
  */
 template <
+    typename SizeType,
     typename KeyType,
-    typename ValueType = util::NullType>
-struct TripleBuffer : MultipleBuffer<3, KeyType, ValueType>
+    typename ValueType = util::NullType,
+    unsigned int TARGET = util::DEVICE>
+struct TripleBuffer : MultipleBuffer<3, SizeType, KeyType, ValueType, TARGET>
 {
-    typedef MultipleBuffer<3, KeyType, ValueType> ParentType;
+    typedef MultipleBuffer<3, SizeType, KeyType, ValueType, TARGET> ParentType;
 
     // Constructor
     TripleBuffer() : ParentType() {}
