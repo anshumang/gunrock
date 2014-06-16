@@ -62,8 +62,8 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
         int             num_associate,gpu_idx;
         //VertexId        **d_associate_in;
         //VertexId        **h_associate_in;
-        util::Array1D<SizeT,VertexId > *associate_in ;
-        util::Array1D<SizeT,VertexId*> associate_ins ;
+        util::Array1D<SizeT,VertexId > *associate_in[2];
+        util::Array1D<SizeT,VertexId*> associate_ins[2];
         //VertexId        **d_associate_out;
         //VertexId        **h_associate_out;
         util::Array1D<SizeT,VertexId > *associate_out;
@@ -76,9 +76,9 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
         //SizeT           * out_length;
         util::Array1D<SizeT,SizeT    > out_length    ;
         //SizeT           * in_length;
-        util::Array1D<SizeT,SizeT    > in_length     ;
+        util::Array1D<SizeT,SizeT    > in_length[2]  ;
         //VertexId        * d_keys_in;
-        util::Array1D<SizeT,VertexId > keys_in       ;
+        util::Array1D<SizeT,VertexId > keys_in  [2]  ;
 
         DataSlice()
         {
@@ -86,18 +86,22 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             //d_preds         = NULL;
             num_associate   = 0;
             gpu_idx         = 0;
-            associate_in    = NULL;
+            associate_in[0] = NULL;
+            associate_in[1] = NULL;
             associate_out   = NULL;
             //associate_org   = NULL;
-            labels        .SetName("labels"        );
-            preds         .SetName("preds"         );
-            visited_mask  .SetName("visited_mask"  );
-            associate_ins .SetName("associate_ins" );
-            associate_outs.SetName("associate_outs");
-            associate_orgs.SetName("associate_orgs");
-            out_length    .SetName("out_length"    );
-            in_length     .SetName("in_length"     );
-            keys_in       .SetName("keys_in"       );
+            labels          .SetName("labels"          );
+            preds           .SetName("preds"           );
+            visited_mask    .SetName("visited_mask"    );
+            associate_ins[0].SetName("associate_ins[0]");
+            associate_ins[1].SetName("associate_ins[1]");
+            associate_outs  .SetName("associate_outs"  );
+            associate_orgs  .SetName("associate_orgs"  );
+            out_length      .SetName("out_length"      );
+            in_length    [0].SetName("in_length[0]"    );
+            in_length    [1].SetName("in_length[1]"    );
+            keys_in      [0].SetName("keys_in[0]"      );
+            keys_in      [1].SetName("keys_in[1]"      );
             //d_associate_in  = NULL;
             //h_associate_in  = NULL;
             //d_associate_out = NULL;
@@ -121,22 +125,30 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
             //d_labels = NULL; d_preds = NULL;
             labels        .Release();
             preds         .Release();
-            keys_in       .Release();
+            keys_in    [0].Release();
+            keys_in    [1].Release();
             visited_mask  .Release();
-            in_length     .Release();
+            in_length  [0].Release();
+            in_length  [1].Release();
             out_length    .Release();
             associate_orgs.Release();
  
             if (associate_in != NULL)
             {
                 for (int i=0;i<num_associate;i++)
-                    associate_in[i].Release();
+                {
+                    associate_in[0][i].Release();
+                    associate_in[1][i].Release();
+                }
                 //util::GRError(cudaFree(h_associate_in[i]), "~DataSlice cudaFree h_associate_in failed", __FILE__, __LINE__);
                 //util::GRError(cudaFree(d_associate_in   ), "~DataSlice cudaFree d_associate_in failed", __FILE__, __LINE__);
                 //util::GRError(cudaFree(d_keys_in        ), "_DataSlice cudaFree d_keys_in failed",      __FILE__, __LINE__);
-                delete[] associate_in;
-                associate_in=NULL;
-                associate_ins.Release();
+                delete[] associate_in[0];
+                delete[] associate_in[1];
+                associate_in[0]=NULL;
+                associate_in[1]=NULL;
+                associate_ins[0].Release();
+                associate_ins[1].Release();
                 //delete[] h_associate_in;
                 //delete[] in_length;
                 //h_associate_in = NULL;
@@ -214,24 +226,25 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                 //                "DataSlice cudaMemcpy d_associate_org failed", __FILE__, __LINE__)) return retval;
             }
 
-            if (retval = in_length.Allocate(num_gpus,util::HOST)) return retval;
+            if (retval = in_length[0].Allocate(num_gpus,util::HOST)) return retval;
+            if (retval = in_length[1].Allocate(num_gpus,util::HOST)) return retval;
             // Create incoming buffer on device
             if (num_in_nodes > 0)
-            {
+            for (int t=0;t<2;t++) {
                 //h_associate_in = new VertexId*[num_associate];
-                associate_in=new util::Array1D<SizeT,VertexId>[num_associate];
-                associate_ins.SetName("associate_ins");
-                if (retval = associate_ins.Allocate(num_associate, util::DEVICE | util::HOST)) return retval;
+                associate_in[t]=new util::Array1D<SizeT,VertexId>[num_associate];
+                associate_ins[t].SetName("associate_ins");
+                if (retval = associate_ins[t].Allocate(num_associate, util::DEVICE | util::HOST)) return retval;
                 for (int i=0;i<num_associate;i++)
                 {
-                    associate_in[i].SetName("associate_ins[]");
-                    if (retval = associate_in[i].Allocate(num_in_nodes,util::DEVICE)) return retval;
-                    associate_ins[i]=associate_in[i].GetPointer(util::DEVICE);
+                    associate_in[t][i].SetName("associate_ins[]");
+                    if (retval = associate_in[t][i].Allocate(num_in_nodes,util::DEVICE)) return retval;
+                    associate_ins[t][i]=associate_in[t][i].GetPointer(util::DEVICE);
                     //if (retval = util::GRError(cudaMalloc((void**)&(h_associate_in[i]),num_in_nodes * sizeof(VertexId)),
                     //                "DataSlice cudamalloc h_associate_in failed", __FILE__, __LINE__)) break;
                 }
-                if (retval = associate_ins.Move(util::HOST,util::DEVICE)) return retval;
-                if (retval = keys_in.Allocate(num_in_nodes,util::DEVICE)) return retval;
+                if (retval = associate_ins[t].Move(util::HOST,util::DEVICE)) return retval;
+                if (retval = keys_in[t].Allocate(num_in_nodes,util::DEVICE)) return retval;
                 //if (retval) return retval;
                 //if (retval = util::GRError(cudaMalloc((void**)&(d_associate_in),num_associate * sizeof(VertexId*)),
                 //                "DataSlice cuaaMalloc d_associate_in failed", __FILE__, __LINE__)) return retval;

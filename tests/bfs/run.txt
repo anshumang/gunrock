@@ -1,0 +1,26 @@
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/ak2010/ak2010.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/ak2010/ak2010.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/ak2010/ak2010.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/ak2010/ak2010.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/belgium_osm/belgium_osm.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/belgium_osm/belgium_osm.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/belgium_osm/belgium_osm.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/belgium_osm/belgium_osm.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/coAuthorsDBLP/coAuthorsDBLP.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/coAuthorsDBLP/coAuthorsDBLP.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/coAuthorsDBLP/coAuthorsDBLP.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/coAuthorsDBLP/coAuthorsDBLP.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n13/delaunay_n13.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n13/delaunay_n13.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n13/delaunay_n13.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n13/delaunay_n13.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n21/delaunay_n21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n21/delaunay_n21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n21/delaunay_n21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/delaunay_n21/delaunay_n21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/kron_g500-logn21/kron_g500-logn21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/kron_g500-logn21/kron_g500-logn21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/kron_g500-logn21/kron_g500-logn21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/kron_g500-logn21/kron_g500-logn21.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --undirected --mark-pred
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/webbase-1M/webbase-1M.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0
+./bin/test_bfs_6.0_x86_64 market /data/gunrock_dataset/large/webbase-1M/webbase-1M.mtx --src=randomize --device=0,1,2,3 --partition_method=metis --queue-sizing=4.0 --mark-pred
