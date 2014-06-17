@@ -54,6 +54,7 @@ public:
 
     int       **partition_tables;
     VertexId  **convertion_tables;
+    VertexId  **original_vertexes;
     SizeT     **in_offsets;
     SizeT     **out_offsets;
     //Mthods
@@ -72,6 +73,7 @@ public:
         CUTThread  thread_Id;
         int        *partition_table0,**partition_table1;
         VertexId   *convertion_table0,**convertion_table1;
+        VertexId   **original_vertexes;
         SizeT      **in_offsets,**out_offsets;
     };
 
@@ -86,6 +88,7 @@ public:
         sub_graphs        = NULL;
         partition_tables  = NULL;
         convertion_tables = NULL;
+        original_vertexes = NULL;
         in_offsets        = NULL;
         out_offsets       = NULL;
     }
@@ -107,6 +110,7 @@ public:
         sub_graphs        = new GraphT   [num_gpus  ];
         partition_tables  = new int*     [num_gpus+1];
         convertion_tables = new VertexId*[num_gpus+1];
+        original_vertexes = new VertexId*[num_gpus  ];
         in_offsets        = new SizeT*   [num_gpus  ];
         out_offsets       = new SizeT*   [num_gpus  ];
         
@@ -114,6 +118,7 @@ public:
         {
             partition_tables [i] = NULL;
             convertion_tables[i] = NULL;
+            if (i!=num_gpus) original_vertexes[i] = NULL;
         }
         partition_tables [0] = new int     [graph.nodes];
         convertion_tables[0] = new VertexId[graph.nodes];
@@ -143,6 +148,7 @@ public:
         VertexId*   convertion_table0 = thread_data->convertion_table0;
         int**       partition_table1  = thread_data->partition_table1;
         VertexId**  convertion_table1 = thread_data->convertion_table1;
+        VertexId**  original_vertexes = thread_data->original_vertexes;
         SizeT**     out_offsets       = thread_data->out_offsets;
         SizeT**     in_offsets        = thread_data->in_offsets;
         SizeT       num_nodes         = 0, node_counter;
@@ -218,8 +224,9 @@ public:
 
         if (convertion_table1[0] != NULL) free(convertion_table1[0]);
         if (partition_table1 [0] != NULL) free(partition_table1[0]);
-        convertion_table1[0]= (VertexId*) malloc (sizeof(VertexId) * num_nodes);
-        partition_table1 [0]= (int*) malloc (sizeof(int) * num_nodes);
+        convertion_table1[0]= (VertexId*) malloc (sizeof(VertexId) * num_nodes);//new VertexId[num_nodes];
+        partition_table1 [0]= (int*)      malloc (sizeof(int)      * num_nodes);//new int     [num_nodes];
+        original_vertexes[0]= (VertexId*) malloc (sizeof(VertexId) * num_nodes);//new VertexId[num_nodes];
         edge_counter=0;
         for (SizeT node=0; node<graph->nodes; node++)
         if (partition_table0[node] == gpu)
@@ -229,6 +236,7 @@ public:
             if (graph->node_values != NULL) sub_graph->node_values[node_]=graph->node_values[node];
             partition_table1 [0][node_] = 0;
             convertion_table1[0][node_] = node_;
+            original_vertexes[0][node_] = node;
             for (SizeT edge=graph->row_offsets[node]; edge<graph->row_offsets[node+1]; edge++)
             {
                 SizeT    neibor  = graph->column_indices[edge];
@@ -244,6 +252,7 @@ public:
                     sub_graph->row_offsets[neibor_]=num_edges;
                     partition_table1 [0][neibor_] = peer_;
                     convertion_table1[0][neibor_] = convertion_table0[neibor];
+                    original_vertexes[0][neibor_] = neibor;
                 }
                 edge_counter++;
             }   
@@ -275,6 +284,7 @@ public:
             thread_data[gpu].convertion_table0 = convertion_tables[0];
             thread_data[gpu].partition_table1  = &(partition_tables[gpu+1]);
             thread_data[gpu].convertion_table1 = &(convertion_tables[gpu+1]);
+            thread_data[gpu].original_vertexes = &(original_vertexes[gpu]);
             thread_data[gpu].in_offsets        = in_offsets;
             thread_data[gpu].out_offsets       = out_offsets;
             thread_data[gpu].thread_Id         = cutStartThread((CUT_THREADROUTINE)&(MakeSubGraph_Thread), (void*)(&(thread_data[gpu])));
@@ -296,6 +306,7 @@ public:
         GraphT*    &sub_graphs,
         int**      &partition_tables,
         VertexId** &convertion_tables,
+        VertexId** &original_vertexes,
         SizeT**    &in_offsets,
         SizeT**    &out_offsets)
     {

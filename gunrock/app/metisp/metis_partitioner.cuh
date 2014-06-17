@@ -77,6 +77,7 @@ struct MetisPartitioner : PartitionerBase<VertexId,SizeT,Value>
         GraphT*    &sub_graphs,
         int**      &partition_tables,
         VertexId** &convertion_tables,
+        VertexId** &original_vertexes,
         SizeT**    &in_offsets,
         SizeT**    &out_offsets)
     {
@@ -109,6 +110,7 @@ struct MetisPartitioner : PartitionerBase<VertexId,SizeT,Value>
         sub_graphs        = this->sub_graphs;
         partition_tables  = this->partition_tables;
         convertion_tables = this->convertion_tables;
+        original_vertexes = this->original_vertexes;
         in_offsets        = this->in_offsets;
         out_offsets       = this->out_offsets;
         return retval;

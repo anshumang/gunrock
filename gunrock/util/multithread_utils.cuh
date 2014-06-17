@@ -54,6 +54,8 @@ namespace cpu_mt {
         pthread_cond_t conditionVariable;*/
         pthread_barrier_t barrier;
         bool released;
+        int* marker;
+        int releaseCount;
     };
 #endif
 
@@ -137,6 +139,9 @@ extern "C" {
         CPUBarrier CB;
         pthread_barrier_init(&CB.barrier,NULL,releaseCount);
         CB.released=false;
+        CB.releaseCount=releaseCount;
+        CB.marker=new int[releaseCount];
+        for (int i=0;i<releaseCount;i++) CB.marker[i]=0;
         return CB;
     }
 
@@ -144,16 +149,22 @@ extern "C" {
     {
         //bool pre_released=CB->released;
         CB->released=true;
-        //printf("releasing");fflush(stdout);
-        pthread_barrier_wait(&(CB->barrier));
-        //printf("released");fflush(stdout);
+        //printf("releasing\n");fflush(stdout);
+        bool to_release=false;
+        for (int i=0;i<CB->releaseCount;i++) 
+            if (CB->marker[i]==1) {to_release=true;break;}
+        if (to_release)
+            pthread_barrier_wait(&(CB->barrier));
+        //printf("released\n");fflush(stdout);
     }
 
     void IncrementnWaitBarrier(CPUBarrier *CB, int thread_num)
     {
+        CB->marker[thread_num]=1;
         //printf("%d: waiting\n",thread_num);fflush(stdout);
         //if (!CB->released) 
         pthread_barrier_wait(&(CB->barrier));
+        CB->marker[thread_num]=0;
         //printf("%d: past\n", thread_num);fflush(stdout);
     }
 

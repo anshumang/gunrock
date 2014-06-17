@@ -117,7 +117,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
 
         ~DataSlice()
         {
-            //printf("~DataSlice begin.\n"); fflush(stdout);
+            printf("~DataSlice begin.\n"); fflush(stdout);
             util::GRError(cudaSetDevice(gpu_idx),
                 "~DataSlice cudaSetDevice failed", __FILE__, __LINE__);
             //if (d_labels) util::GRError(cudaFree(d_labels), "~DataSlice cudaFree d_labels failed", __FILE__, __LINE__);
@@ -182,7 +182,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
                 //d_associate_org = NULL;
                 //h_associate_org = NULL;
             //}
-            //printf("~DataSlice end.\n"); fflush(stdout);
+            printf("~DataSlice end.\n"); fflush(stdout);
         }
 
         cudaError_t Init(
@@ -336,6 +336,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
      */
     ~BFSProblem()
     {
+        printf("~BFSProblem() begin.\n");fflush(stdout);
         if (data_slices==NULL) return;
         for (int i = 0; i < this->num_gpus; ++i)
         {
@@ -347,6 +348,7 @@ struct BFSProblem : ProblemBase<VertexId, SizeT, Value,
         }
         //if (d_data_slices) delete[] d_data_slices; d_data_slices=NULL;
         if (data_slices  ) delete[] data_slices; data_slices=NULL;
+        printf("~BFSProblem() end.\n");fflush(stdout);
     }
 
     /**
